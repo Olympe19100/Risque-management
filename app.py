@@ -11,7 +11,7 @@ from PIL import Image
 cash_threshold = 0.0145  # Seuil pour entrer en position "cash" dans HMM
 cvar_threshold = 0.0569  # Seuil de CVaR pour sortir du marché
 leverage = 2  # Levier à appliquer
-train_window = 22000  # Taille de la fenêtre d'entraînement (22 000 points de données)
+train_window = 24000  # Taille de la fenêtre d'entraînement (24 000 points de données)
 
 # Actions et leurs pondérations
 stocks = {
@@ -26,7 +26,7 @@ logo = Image.open(r"Olympe Financial group (Logo) (1).png")
 st.image(logo, width=200)  # Afficher le logo
 
 # Personnalisation des couleurs pour correspondre à la charte graphique
-custom_color_palette = ['#D4AF37', '#343a40', '#007bff']
+custom_color_palette = ['#0000FF', '#D4AF37']  # Bleu et Doré
 
 # Télécharger et préparer les données du S&P 500 (^GSPC)
 @st.cache_data
@@ -79,35 +79,22 @@ def apply_cvar_risk_management(returns, cvar_threshold, window=252):
     return managed_returns
 
 # Fonction pour appliquer la stratégie Long/Short/Cash
-def apply_long_short_cash_strategy(returns, state_probs, cash_threshold, leverage):
-    # Assurons-nous que returns et state_probs ont le même index
-    common_index = returns.index.intersection(state_probs.index)
-    returns = returns.loc[common_index]
-    state_probs = state_probs.loc[common_index]
-    
-    # state_probs.iloc[:, 0] est la probabilité de l'état haussier
-    market_regime = np.where(
-        state_probs.iloc[:, 0] > (1 - cash_threshold), 0,  # Long (très probablement haussier)
-        np.where(state_probs.iloc[:, 0] < cash_threshold, 1,  # Short (très probablement baissier)
-                 2)  # Cash (incertain)
-    )
-    
+def apply_long_short_cash_strategy(returns, market_regime, cash_threshold, leverage):
     strategy_returns = np.where(
-        market_regime == 0, returns * leverage,  # Long
-        np.where(market_regime == 1, -returns * leverage,  # Short
-                 0)  # Cash
+        market_regime == 0, returns * leverage,  # Long (régime haussier)
+        np.where(market_regime == 1, -returns * leverage,  # Short (régime baissier)
+                 0)  # Cash (incertain, mais non utilisé dans ce modèle à 2 états)
     )
-    
-    return pd.Series(strategy_returns, index=common_index)
+    return pd.Series(strategy_returns, index=returns.index)
 
 # Télécharger les données du S&P 500
 st.title("Olympe Financial Group - Tableau de Bord")
 st.write("Analyse des rendements du portefeuille basé sur un modèle HMM et gestion des risques via la CVaR.")
 
-gspc_data = get_market_data()
+data = get_market_data()
 
 # Affichage du nombre total de lignes
-nombre_lignes = gspc_data.shape[0]
+nombre_lignes = data.shape[0]
 st.write(f"Nombre total de points de données du S&P 500 téléchargés : {nombre_lignes}")
 
 # Demander à l'utilisateur d'entrer son montant d'investissement
@@ -121,37 +108,57 @@ if investment > 0:
         st.write(f"{stock} : {allocation:.2f} €")
 
 # Vérifier que les données ne sont pas vides
-if gspc_data.empty:
+if data.empty:
     st.error("Les données du S&P 500 sont vides.")
 else:
-    # Diviser les données en entraînement (22 000 points) et test
-    train_data = gspc_data.iloc[:train_window]
-    test_data = gspc_data.iloc[train_window:]
+    # Diviser les données en entraînement (24 000 points) et test
+    train_data = data.iloc[:train_window]
+    test_data = data.iloc[train_window:]
 
-    # Entraînement du modèle HMM sur les 22 000 premiers points
+    # Entraînement du modèle HMM sur les 24 000 premiers points
     np.random.seed(42)
     hmm_model = GaussianHMM(n_components=2, covariance_type="full", n_iter=100000)
     hmm_model.fit(np.array(train_data['returns']).reshape(-1, 1))
     st.write(f"Score du modèle HMM : {hmm_model.score(np.array(train_data['returns']).reshape(-1, 1))}")
 
     # Prédiction des régimes de marché sur les données de test
-    hidden_states = hmm_model.predict(np.array(test_data['returns']).reshape(-1, 1))
-    state_probs = hmm_model.predict_proba(np.array(test_data['returns']).reshape(-1, 1))
-    state_probs = pd.DataFrame(state_probs, index=test_data.index)
+    test_data['market_regime'] = hmm_model.predict(np.array(test_data[['returns']]))
 
-    # Détection du régime actuel et probabilités
-    current_state_prob = state_probs.iloc[-1, 0]  # Probabilité de l'état haussier
-    current_probs = state_probs.iloc[-1]  # Probabilités des états
-    st.subheader('Probabilités de Transition Actuelles')
-    st.write(f"Probabilité état haussier (Long) : {current_probs[0]:.2%}")
-    st.write(f"Probabilité état baissier (Short) : {current_probs[1]:.2%}")
-    
-    if current_state_prob > (1 - cash_threshold):
+    # Afficher la matrice de transition du modèle HMM
+    transition_matrix = hmm_model.transmat_
+    st.subheader("Matrice de Transition du Modèle HMM")
+    st.write(transition_matrix)
+
+    # Détection du régime actuel
+    last_regime = test_data['market_regime'].iloc[-1]
+    st.subheader('Régime de Marché Actuel')
+    if last_regime == 0:
         st.info("Régime actuel : Bullish (Haussier). Recommandation : Position Long.")
-    elif current_state_prob < cash_threshold:
-        st.warning("Régime actuel : Bearish (Baissier). Recommandation : Position Short.")
     else:
-        st.info("Régime actuel : Incertain. Recommandation : Position Cash.")
+        st.warning("Régime actuel : Bearish (Baissier). Recommandation : Position Short.")
+
+    # Graphique des régimes de marché détectés
+    st.subheader("Régimes de Marché Détectés par le HMM")
+    fig_regimes = px.scatter(
+        test_data, 
+        x=test_data.index, 
+        y='Adj Close', 
+        color='market_regime', 
+        title="Régimes de Marché Détectés",
+        color_discrete_map={
+            0: '#0000FF',  # Bleu
+            1: '#D4AF37'   # Doré
+        }
+    )
+
+    # Réduire la taille des points
+    fig_regimes.update_traces(marker=dict(size=3))
+
+    st.plotly_chart(fig_regimes)
+
+    # Afficher les dernières données de régime de marché
+    st.subheader("Dernières Données de Régime de Marché")
+    st.write(test_data.tail(1))
 
     # Télécharger les données des actions
     start_date = test_data.index[0]
@@ -162,7 +169,7 @@ else:
     portfolio_returns = calculate_portfolio_returns(stocks, stock_data)
 
     # Appliquer la stratégie Long/Short/Cash
-    strategy_returns = apply_long_short_cash_strategy(portfolio_returns, state_probs, cash_threshold, leverage)
+    strategy_returns = apply_long_short_cash_strategy(portfolio_returns, test_data['market_regime'], cash_threshold, leverage)
 
     # Application de la gestion des risques basée sur la CVaR
     managed_returns = apply_cvar_risk_management(strategy_returns, cvar_threshold)
@@ -191,33 +198,6 @@ else:
     st.subheader('Rendements Cumulés du Portefeuille avec Stratégie Long/Short/Cash et Gestion des Risques')
     fig_cvar = px.line(cumulative_managed_returns, title='Rendements Cumulés (Stratégie Long/Short/Cash avec Gestion des Risques)', color_discrete_sequence=custom_color_palette)
     st.plotly_chart(fig_cvar)
-
-    # Graphique des régimes de marché détectés (modifié selon vos spécifications)
-    st.subheader("Régimes de Marché Détectés par le HMM")
-    test_data['Regime'] = hidden_states
-    test_data['Regime_Label'] = np.select(
-        [test_data['Regime'] == 0, test_data['Regime'] == 1],
-        ['Haussier', 'Baissier'],
-        default='Incertain'
-    )
-
-    fig_regimes = px.scatter(
-        test_data, 
-        x=test_data.index, 
-        y='Adj Close', 
-        color='Regime_Label', 
-        title="Régimes de Marché Détectés",
-        color_discrete_map={
-            'Haussier': '#0000FF',  # Bleu
-            'Baissier': '#D4AF37',  # Doré
-            'Incertain': '#ADD8E6'  # Bleu clair
-        }
-    )
-
-    # Réduire la taille des points
-    fig_regimes.update_traces(marker=dict(size=3))
-
-    st.plotly_chart(fig_regimes)
 
     # Graphique en camembert des pondérations du portefeuille
     st.subheader('Pondérations du Portefeuille')

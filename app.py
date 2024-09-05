@@ -10,7 +10,7 @@ from PIL import Image
 cash_threshold = 0.0145  # Seuil pour entrer en position "cash" dans HMM
 cvar_threshold = 0.0569  # Seuil de CVaR pour sortir du marché
 leverage = 2  # Levier à appliquer
-train_window = 23000  # Taille de la fenêtre d'entraînement (22 000 points de données)
+train_window = 22000  # Taille de la fenêtre d'entraînement (22 000 points de données)
 
 # Actions et leurs pondérations
 stocks = {
@@ -21,7 +21,7 @@ stocks = {
 }
 
 # Charger et afficher le logo
-logo = Image.open(r"Olympe Financial group (Logo) (1).png")
+logo = Image.open(r"C:\Users\Hamid\Desktop\Trading Olympe\Olympe Financial group (Logo) (1).png")
 st.image(logo, width=200)  # Afficher le logo
 
 # Personnalisation des couleurs pour correspondre à la charte graphique

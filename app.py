@@ -21,7 +21,7 @@ stocks = {
 }
 
 # Charger et afficher le logo
-logo = Image.open(r"C:\Users\Hamid\Desktop\Trading Olympe\Olympe Financial group (Logo) (1).png")
+logo = Image.open(r"Olympe Financial group (Logo) (1).png")
 st.image(logo, width=200)  # Afficher le logo
 
 # Personnalisation des couleurs pour correspondre à la charte graphique

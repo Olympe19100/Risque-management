@@ -5,12 +5,14 @@ import pandas as pd
 import plotly.express as px
 from hmmlearn.hmm import GaussianHMM
 from PIL import Image
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 # Seuils pour la stratégie
 cash_threshold = 0.0145  # Seuil pour entrer en position "cash" dans HMM
 cvar_threshold = 0.0569  # Seuil de CVaR pour sortir du marché
 leverage = 2  # Levier à appliquer
-train_window = 22000  # Taille de la fenêtre d'entraînement (22 000 points de données)
+train_window = 24000  # Taille de la fenêtre d'entraînement (24 000 points de données)
 
 # Actions et leurs pondérations
 stocks = {
@@ -42,7 +44,7 @@ def max_drawdown(returns):
     max_drawdown_value = drawdown.min()
     return max_drawdown_value
 
-# Télécharger et préparer les données du S&P 500 (^GSPC)
+# Télécharger et préparer les données du S&P 500 (^GSPC) avec nouvelle implémentation
 @st.cache_data
 def get_market_data():
     data = yf.download('^GSPC')
@@ -92,29 +94,7 @@ def apply_cvar_risk_management(returns, cvar_threshold, window=252):
     managed_returns[risk_management_exit] = 0  # Appliquer la gestion en remplaçant les rendements par 0
     return managed_returns
 
-# Fonction pour appliquer la stratégie Long/Short/Cash
-def apply_long_short_cash_strategy(returns, state_probs, cash_threshold, leverage):
-    # Assurons-nous que returns et state_probs ont le même index
-    common_index = returns.index.intersection(state_probs.index)
-    returns = returns.loc[common_index]
-    state_probs = state_probs.loc[common_index]
-    
-    # state_probs.iloc[:, 0] est la probabilité de l'état haussier
-    market_regime = np.where(
-        state_probs.iloc[:, 0] > (1 - cash_threshold), 0,  # Long (très probablement haussier)
-        np.where(state_probs.iloc[:, 0] < cash_threshold, 1,  # Short (très probablement baissier)
-                 2)  # Cash (incertain)
-    )
-    
-    strategy_returns = np.where(
-        market_regime == 0, returns * leverage,  # Long
-        np.where(market_regime == 1, -returns * leverage,  # Short
-                 0)  # Cash
-    )
-    
-    return pd.Series(strategy_returns, index=common_index)
-
-# Télécharger les données du S&P 500
+# Télécharger les données du S&P 500 avec la nouvelle méthode
 st.title("Olympe Financial Group - Tableau de Bord")
 st.write("Analyse des rendements du portefeuille basé sur un modèle HMM et gestion des risques via la CVaR.")
 
@@ -124,48 +104,39 @@ gspc_data = get_market_data()
 nombre_lignes = gspc_data.shape[0]
 st.write(f"Nombre total de points de données du S&P 500 téléchargés : {nombre_lignes}")
 
-# Demander à l'utilisateur d'entrer son montant d'investissement
-investment = st.number_input("Montant total de l'investissement (€)", min_value=0.0, value=10000.0)
-
-# Calculer l'allocation sur chaque action en fonction du montant d'investissement
-if investment > 0:
-    st.subheader('Allocation du portefeuille')
-    for stock, weight in stocks.items():
-        allocation = (weight / 100) * investment
-        st.write(f"{stock} : {allocation:.2f} €")
-
 # Vérifier que les données ne sont pas vides
 if gspc_data.empty:
     st.error("Les données du S&P 500 sont vides.")
 else:
-    # Diviser les données en entraînement (22 000 points) et test
+    # Diviser les données en entraînement (24 000 points) et test
     train_data = gspc_data.iloc[:train_window]
     test_data = gspc_data.iloc[train_window:]
 
-    # Entraînement du modèle HMM sur les 22 000 premiers points
+    # Entraînement du modèle HMM sur les 24 000 premiers points
     np.random.seed(42)
     hmm_model = GaussianHMM(n_components=2, covariance_type="full", n_iter=100000)
     hmm_model.fit(np.array(train_data['returns']).reshape(-1, 1))
     st.write(f"Score du modèle HMM : {hmm_model.score(np.array(train_data['returns']).reshape(-1, 1))}")
 
     # Prédiction des régimes de marché sur les données de test
-    hidden_states = hmm_model.predict(np.array(test_data['returns']).reshape(-1, 1))
-    state_probs = hmm_model.predict_proba(np.array(test_data['returns']).reshape(-1, 1))
-    state_probs = pd.DataFrame(state_probs, index=test_data.index)
+    test_data['market_regime'] = hmm_model.predict(np.array(test_data[['returns']]))
 
-    # Détection du régime actuel et probabilités
-    current_state_prob = state_probs.iloc[-1, 0]  # Probabilité de l'état haussier
-    current_probs = state_probs.iloc[-1]  # Probabilités des états
-    st.subheader('Probabilités de Transition Actuelles')
-    st.write(f"Probabilité état haussier (Long) : {current_probs[0]:.2%}")
-    st.write(f"Probabilité état baissier (Short) : {current_probs[1]:.2%}")
-    
-    if current_state_prob > (1 - cash_threshold):
-        st.info("Régime actuel : Bullish (Haussier). Recommandation : Position Long.")
-    elif current_state_prob < cash_threshold:
-        st.warning("Régime actuel : Bearish (Baissier). Recommandation : Position Short.")
-    else:
-        st.info("Régime actuel : Incertain. Recommandation : Position Cash.")
+    # Afficher la matrice de transition du modèle HMM
+    transition_matrix = hmm_model.transmat_
+    st.write("Matrice de transition :")
+    st.write(transition_matrix)
+
+    # Visualisation des régimes de marché détectés
+    palette = {0: 'blue', 1: 'Gold'}
+    plt.figure(figsize=(12, 8))
+    sns.scatterplot(x=test_data.index, y='Adj Close', hue='market_regime', data=test_data, s=10, palette=palette)
+    plt.title('Market regime')
+    st.pyplot(plt.gcf())
+
+    # Afficher la dernière donnée de régime de marché
+    last_data = test_data.tail(1)
+    st.subheader("Dernière donnée de régime de marché :")
+    st.write(last_data)
 
     # Télécharger les données des actions
     start_date = test_data.index[0]
@@ -176,6 +147,7 @@ else:
     portfolio_returns = calculate_portfolio_returns(stocks, stock_data)
 
     # Appliquer la stratégie Long/Short/Cash
+    state_probs = pd.DataFrame(hmm_model.predict_proba(np.array(test_data['returns']).reshape(-1, 1)), index=test_data.index)
     strategy_returns = apply_long_short_cash_strategy(portfolio_returns, state_probs, cash_threshold, leverage)
 
     # Application de la gestion des risques basée sur la CVaR
@@ -205,12 +177,6 @@ else:
     st.subheader('Rendements Cumulés du Portefeuille avec Stratégie Long/Short/Cash et Gestion des Risques')
     fig_cvar = px.line(cumulative_managed_returns, title='Rendements Cumulés (Stratégie Long/Short/Cash avec Gestion des Risques)', color_discrete_sequence=custom_color_palette)
     st.plotly_chart(fig_cvar)
-
-    # Graphique des régimes de marché détectés
-    st.subheader("Régimes de Marché Détectés par le HMM")
-    test_data['Regime'] = hidden_states
-    fig_regimes = px.scatter(test_data, x=test_data.index, y='Adj Close', color='Regime', title="Régimes de Marché Détectés", color_discrete_sequence=custom_color_palette)
-    st.plotly_chart(fig_regimes)
 
     # Graphique en camembert des pondérations du portefeuille
     st.subheader('Pondérations du Portefeuille')

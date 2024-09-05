@@ -4,7 +4,6 @@ import numpy as np
 import pandas as pd
 import plotly.express as px
 from hmmlearn.hmm import GaussianHMM
-from quantstats.stats import sharpe, max_drawdown
 from PIL import Image
 
 # Seuils pour la stratégie
@@ -27,6 +26,16 @@ st.image(logo, width=200)  # Afficher le logo
 
 # Personnalisation des couleurs pour correspondre à la charte graphique
 custom_color_palette = ['#0000FF', '#D4AF37']  # Bleu et Doré
+
+# Fonctions pour remplacer quantstats
+def sharpe(returns, risk_free=0.0, periods=252):
+    return (returns.mean() - risk_free) / returns.std() * np.sqrt(periods)
+
+def max_drawdown(returns):
+    wealth_index = (1 + returns).cumprod()
+    previous_peaks = wealth_index.cummax()
+    drawdowns = (wealth_index - previous_peaks) / previous_peaks
+    return drawdowns.min()
 
 # Télécharger et préparer les données du S&P 500 (^GSPC)
 @st.cache_data

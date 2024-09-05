@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import plotly.express as px
 from hmmlearn.hmm import GaussianHMM
+from quantstats.stats import sharpe, max_drawdown
 from PIL import Image
 
 # Seuils pour la stratégie
@@ -55,21 +56,12 @@ def calculate_portfolio_returns(stocks, stock_data):
     portfolio_returns['Portfolio'] = portfolio_returns.sum(axis=1)
     return portfolio_returns['Portfolio']
 
-# Calcul manuel du ratio de Sharpe
-def calculate_sharpe_ratio(returns, risk_free_rate=0.0):
-    return np.sqrt(252) * (returns.mean() - risk_free_rate) / returns.std()
-
-# Calcul manuel du max drawdown
-def calculate_max_drawdown(returns):
-    cumulative_returns = (1 + returns).cumprod()
-    peak = cumulative_returns.cummax()
-    drawdown = (cumulative_returns - peak) / peak
-    max_drawdown = drawdown.min()
-    return max_drawdown
-
-# Calcul de la volatilité annualisée
-def calculate_volatility(returns):
-    return returns.std() * np.sqrt(252)
+# Calcul des métriques pour le portefeuille
+def calculate_metrics(returns):
+    sharpe_ratio = sharpe(returns)
+    max_dd = max_drawdown(returns)
+    volatility = returns.std() * np.sqrt(252)  # Annualisée
+    return sharpe_ratio, max_dd, volatility
 
 # Fonction pour calculer la CVaR
 def calculate_cvar(returns, confidence_level=0.95, window=252):
@@ -88,10 +80,12 @@ def apply_cvar_risk_management(returns, cvar_threshold, window=252):
 
 # Fonction pour appliquer la stratégie Long/Short/Cash
 def apply_long_short_cash_strategy(returns, state_probs, cash_threshold, leverage):
+    # Assurons-nous que returns et state_probs ont le même index
     common_index = returns.index.intersection(state_probs.index)
     returns = returns.loc[common_index]
     state_probs = state_probs.loc[common_index]
     
+    # state_probs.iloc[:, 0] est la probabilité de l'état haussier
     market_regime = np.where(
         state_probs.iloc[:, 0] > (1 - cash_threshold), 0,  # Long (très probablement haussier)
         np.where(state_probs.iloc[:, 0] < cash_threshold, 1,  # Short (très probablement baissier)
@@ -174,9 +168,7 @@ else:
     managed_returns = apply_cvar_risk_management(strategy_returns, cvar_threshold)
 
     # Calcul des métriques du portefeuille géré
-    sharpe_ratio = calculate_sharpe_ratio(managed_returns)
-    max_drawdown = calculate_max_drawdown(managed_returns)
-    volatility = calculate_volatility(managed_returns)
+    sharpe_ratio, max_drawdown, volatility = calculate_metrics(managed_returns)
     st.subheader('Métriques du Portefeuille Géré')
     st.write(f"Sharpe Ratio : {sharpe_ratio:.2f}")
     st.write(f"Max Drawdown : {max_drawdown:.2%}")
@@ -203,10 +195,7 @@ else:
     # Graphique des régimes de marché détectés
     st.subheader("Régimes de Marché Détectés par le HMM")
     test_data['Regime'] = hidden_states
-
-    # Couleurs personnalisées pour les régimes (0 = bleu pour haussier, 1 = doré pour baissier, 2 = transparent pour incertitude)
-    regime_colors = ['rgba(0, 0, 255, 0.6)', 'rgba(212, 175, 55, 0.8)', 'rgba(255, 255, 255, 0)']
-    fig_regimes = px.scatter(test_data, x=test_data.index, y='Adj Close', color='Regime', title="Régimes de Marché Détectés", color_discrete_sequence=regime_colors)
+    fig_regimes = px.scatter(test_data, x=test_data.index, y='Adj Close', color='Regime', title="Régimes de Marché Détectés", color_discrete_sequence=custom_color_palette)
     st.plotly_chart(fig_regimes)
 
     # Graphique en camembert des pondérations du portefeuille

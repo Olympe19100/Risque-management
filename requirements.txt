@@ -1,0 +1,5 @@
+yfinance
+quantstats
+hmmlearn
+plotly
+Pillow

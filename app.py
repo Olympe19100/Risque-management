@@ -192,10 +192,31 @@ else:
     fig_cvar = px.line(cumulative_managed_returns, title='Rendements Cumulés (Stratégie Long/Short/Cash avec Gestion des Risques)', color_discrete_sequence=custom_color_palette)
     st.plotly_chart(fig_cvar)
 
-    # Graphique des régimes de marché détectés
+    # Graphique des régimes de marché détectés (modifié selon vos spécifications)
     st.subheader("Régimes de Marché Détectés par le HMM")
     test_data['Regime'] = hidden_states
-    fig_regimes = px.scatter(test_data, x=test_data.index, y='Adj Close', color='Regime', title="Régimes de Marché Détectés", color_discrete_sequence=custom_color_palette)
+    test_data['Regime_Label'] = np.select(
+        [test_data['Regime'] == 0, test_data['Regime'] == 1],
+        ['Haussier', 'Baissier'],
+        default='Incertain'
+    )
+
+    fig_regimes = px.scatter(
+        test_data, 
+        x=test_data.index, 
+        y='Adj Close', 
+        color='Regime_Label', 
+        title="Régimes de Marché Détectés",
+        color_discrete_map={
+            'Haussier': '#0000FF',  # Bleu
+            'Baissier': '#D4AF37',  # Doré
+            'Incertain': '#ADD8E6'  # Bleu clair
+        }
+    )
+
+    # Réduire la taille des points
+    fig_regimes.update_traces(marker=dict(size=3))
+
     st.plotly_chart(fig_regimes)
 
     # Graphique en camembert des pondérations du portefeuille

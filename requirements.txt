@@ -3,3 +3,4 @@ quantstats
 hmmlearn
 plotly
 Pillow
+IPython

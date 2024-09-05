@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import plotly.express as px
 from hmmlearn.hmm import GaussianHMM
+from quantstats.stats import sharpe, max_drawdown
 from PIL import Image
 
 # Seuils pour la stratégie
@@ -21,26 +22,11 @@ stocks = {
 }
 
 # Charger et afficher le logo
-logo = Image.open(r"C:\Users\Hamid\Desktop\Trading Olympe\Olympe Financial group (Logo) (1).png")
+logo = Image.open(r"Olympe Financial group (Logo) (1).png")
 st.image(logo, width=200)  # Afficher le logo
 
 # Personnalisation des couleurs pour correspondre à la charte graphique
 custom_color_palette = ['#D4AF37', '#343a40', '#007bff']
-
-# Fonction pour calculer le Sharpe Ratio
-def sharpe(returns, risk_free_rate=0.0, periods_per_year=252):
-    excess_returns = returns - risk_free_rate
-    annualized_return = np.mean(excess_returns) * periods_per_year
-    annualized_volatility = np.std(excess_returns) * np.sqrt(periods_per_year)
-    return annualized_return / annualized_volatility
-
-# Fonction pour calculer le Max Drawdown
-def max_drawdown(returns):
-    cumulative_returns = (1 + returns).cumprod()
-    max_cumulative = cumulative_returns.cummax()
-    drawdown = (cumulative_returns - max_cumulative) / max_cumulative
-    max_drawdown_value = drawdown.min()
-    return max_drawdown_value
 
 # Télécharger et préparer les données du S&P 500 (^GSPC)
 @st.cache_data
@@ -72,8 +58,8 @@ def calculate_portfolio_returns(stocks, stock_data):
 
 # Calcul des métriques pour le portefeuille
 def calculate_metrics(returns):
-    sharpe_ratio = sharpe(returns)  # Utilisation de la nouvelle fonction
-    max_dd = max_drawdown(returns)  # Utilisation de la nouvelle fonction
+    sharpe_ratio = sharpe(returns)
+    max_dd = max_drawdown(returns)
     volatility = returns.std() * np.sqrt(252)  # Annualisée
     return sharpe_ratio, max_dd, volatility
 

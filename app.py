@@ -11,7 +11,7 @@ from PIL import Image
 cash_threshold = 0.0145  # Seuil pour entrer en position "cash" dans HMM
 cvar_threshold = 0.0569  # Seuil de CVaR pour sortir du marché
 leverage = 2  # Levier à appliquer
-train_window = 23000  # Taille de la fenêtre d'entraînement (22 000 points de données)
+train_window = 22000  # Taille de la fenêtre d'entraînement (22 000 points de données)
 
 # Actions et leurs pondérations
 stocks = {
@@ -194,8 +194,23 @@ else:
 
     # Graphique des régimes de marché détectés
     st.subheader("Régimes de Marché Détectés par le HMM")
+
+    # Ajouter le régime à test_data pour le graphique
     test_data['Regime'] = hidden_states
-    fig_regimes = px.scatter(test_data, x=test_data.index, y='Adj Close', color='Regime', title="Régimes de Marché Détectés", color_discrete_sequence=custom_color_palette)
+
+    # Visualisation améliorée avec lignes pour les prix ajustés et points pour les régimes
+    fig_regimes = px.line(test_data, x=test_data.index, y='Adj Close', 
+                          title="Régimes de Marché Détectés", 
+                          color_discrete_sequence=[custom_color_palette[1]])
+
+    # Ajouter des points colorés pour les régimes détectés
+    fig_regimes.add_scatter(x=test_data.index, y=test_data['Adj Close'],
+                            mode='markers', marker=dict(color=test_data['Regime'], 
+                                                        colorscale='Viridis', 
+                                                        size=6, colorbar=dict(title="Regime")),
+                            name='Régime')
+
+    # Afficher le graphique dans Streamlit
     st.plotly_chart(fig_regimes)
 
     # Graphique en camembert des pondérations du portefeuille

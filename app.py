@@ -4,12 +4,13 @@ import numpy as np
 import pandas as pd
 import plotly.express as px
 from hmmlearn.hmm import GaussianHMM
+from quantstats.stats import sharpe, max_drawdown
 from PIL import Image
 
 # Seuils pour la stratégie
-cash_threshold = 0.0545  # Seuil pour entrer en position "cash" dans HMM
+cash_threshold = 0.0145  # Seuil pour entrer en position "cash" dans HMM
 cvar_threshold = 0.0569  # Seuil de CVaR pour sortir du marché
-leverage = 1  # Levier à appliquer
+leverage = 2  # Levier à appliquer
 train_window = 22000  # Taille de la fenêtre d'entraînement (22 000 points de données)
 
 # Actions et leurs pondérations
@@ -185,12 +186,6 @@ else:
     else:
         st.success(f"CVaR sous contrôle ({cvar:.2%}).")
 
-    # Graphique des rendements gérés avec stratégie Long/Short/Cash et CVaR
-    cumulative_managed_returns = (1 + managed_returns).cumprod()
-    st.subheader('Rendements Cumulés du Portefeuille avec Stratégie Long/Short/Cash et Gestion des Risques')
-    fig_cvar = px.line(cumulative_managed_returns, title='Rendements Cumulés (Stratégie Long/Short/Cash avec Gestion des Risques)', color_discrete_sequence=custom_color_palette)
-    st.plotly_chart(fig_cvar)
-
     # Graphique des régimes de marché détectés
     st.subheader("Régimes de Marché Détectés par le HMM")
     test_data['Regime'] = hidden_states
@@ -201,9 +196,3 @@ else:
     st.subheader('Pondérations du Portefeuille')
     fig_pie = px.pie(values=list(stocks.values()), names=list(stocks.keys()), title='Pondérations des Sociétés dans le Portefeuille', color_discrete_sequence=custom_color_palette)
     st.plotly_chart(fig_pie)
-
-
-
-
-
-

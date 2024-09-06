@@ -9,7 +9,7 @@ from PIL import Image
 
 # Seuils pour la stratégie
 cash_threshold = 0.0156
-cvar_threshold = 0.0238
+cvar_threshold = 0.0438
 train_window = 22000  # Taille de la fenêtre d'entraînement (22 000 points de données)
 
 # Actions et leurs pondérations

@@ -4,9 +4,9 @@ import numpy as np
 import pandas as pd
 import plotly.express as px
 from hmmlearn.hmm import GaussianHMM
-from sklearn.mixture import GaussianMixture
-from quantstats.stats import sharpe, max_drawdown
 from PIL import Image
+from sklearn.linear_model import LinearRegression
+from datetime import datetime
 
 # Actions et leurs pondérations
 stocks = {
@@ -23,24 +23,47 @@ st.image(logo, width=200)  # Afficher le logo
 # Personnalisation des couleurs pour correspondre à la charte graphique
 custom_color_palette = ['#D4AF37', '#343a40', '#007bff']
 
-# Télécharger et préparer les données du S&P 500 (^GSPC)
+# Fonction pour télécharger les données des actions jusqu'à aujourd'hui
 @st.cache_data
-def get_market_data():
-    data = yf.download('^GSPC')
-    data['returns'] = np.log(data['Adj Close']) - np.log(data['Adj Close'].shift(1))
-    data.dropna(inplace=True)
-    return data[['Adj Close', 'returns']]
+def get_stock_data(_tickers, start, end=None):
+    """
+    Télécharger les données des actions pour les tickers donnés depuis la date de début (start)
+    jusqu'à aujourd'hui si aucune date de fin (end) n'est spécifiée.
+    
+    Parameters:
+    _tickers : liste des symboles boursiers
+    start : date de début (format 'YYYY-MM-DD')
+    end : date de fin (par défaut est None, signifie aujourd'hui)
+    
+    Returns:
+    dict : un dictionnaire contenant les données de chaque action avec les rendements quotidiens
+    """
+    if end is None:
+        end = datetime.now().strftime('%Y-%m-%d')  # Utiliser la date d'aujourd'hui si end n'est pas fourni
 
-# Fonction pour télécharger les données des actions
-@st.cache_data
-def get_stock_data(_tickers, start, end):
     stock_data = {}
     for ticker in _tickers:
         data = yf.download(ticker, start=start, end=end)
         data['Daily Return'] = data['Adj Close'].pct_change()
         data.dropna(inplace=True)
         stock_data[ticker] = data
+    
     return stock_data
+
+# Fonction pour télécharger les données du S&P 500 jusqu'à aujourd'hui
+@st.cache_data
+def get_market_data():
+    """
+    Télécharger et préparer les données du S&P 500 jusqu'à aujourd'hui.
+    
+    Returns:
+    pandas.DataFrame : dataframe contenant les prix ajustés et les rendements du S&P 500
+    """
+    end = datetime.now().strftime('%Y-%m-%d')  # Date de fin est aujourd'hui
+    data = yf.download('^GSPC', end=end)
+    data['returns'] = np.log(data['Adj Close']) - np.log(data['Adj Close'].shift(1))
+    data.dropna(inplace=True)
+    return data[['Adj Close', 'returns']]
 
 # Calcul des rendements pondérés du portefeuille
 def calculate_portfolio_returns(stocks, stock_data):
@@ -51,16 +74,30 @@ def calculate_portfolio_returns(stocks, stock_data):
     portfolio_returns['Portfolio'] = portfolio_returns.sum(axis=1)
     return portfolio_returns['Portfolio']
 
-# Calcul des métriques du portefeuille
-def calculate_metrics(portfolio_returns):
-    sharpe_ratio = sharpe(portfolio_returns)
-    max_dd = max_drawdown(portfolio_returns)
-    volatility = np.std(portfolio_returns) * np.sqrt(252)  # Annualized volatility
-    return sharpe_ratio, max_dd, volatility
+# Fonction pour calculer le Beta de chaque action par rapport au S&P 500
+def calculate_betas(stock_data, gspc_data):
+    betas = {}
+    gspc_returns = gspc_data['returns'].iloc[1:].values.reshape(-1, 1)  # Retours du S&P 500
+    for stock in stock_data:
+        stock_returns = stock_data[stock]['Daily Return'].values.reshape(-1, 1)[1:]
+        reg = LinearRegression().fit(gspc_returns, stock_returns)
+        betas[stock] = reg.coef_[0][0]
+    return betas
+
+# Calcul du Beta du portefeuille
+def calculate_portfolio_beta(betas, stocks):
+    portfolio_beta = 0
+    for stock, weight in stocks.items():
+        portfolio_beta += betas[stock] * (weight / 100)
+    return portfolio_beta
+
+# Stress Testing basé sur le Beta du portefeuille
+def stress_test_with_beta(portfolio_beta, stress_level):
+    return portfolio_beta * stress_level
 
 # Télécharger les données du S&P 500
 st.title("Olympe Financial Group - Tableau de Bord")
-st.write("Analyse des rendements du portefeuille basé sur des modèles HMM et GMM.")
+st.write("Analyse des rendements du portefeuille basé sur un modèle HMM avec Stress Test et Beta du portefeuille.")
 
 gspc_data = get_market_data()
 
@@ -93,75 +130,59 @@ else:
     hmm_model.fit(np.array(train_data['returns']).reshape(-1, 1))
     st.write(f"Score du modèle HMM : {hmm_model.score(np.array(train_data['returns']).reshape(-1, 1))}")
 
-    # Prédiction des régimes de marché avec HMM sur les données de test
-    hidden_states_hmm = hmm_model.predict(np.array(test_data['returns']).reshape(-1, 1))
-    state_probs_hmm = hmm_model.predict_proba(np.array(test_data['returns']).reshape(-1, 1))
-    state_probs_hmm = pd.DataFrame(state_probs_hmm, index=test_data.index)
+    # Prédiction des régimes de marché sur les données de test
+    hidden_states = hmm_model.predict(np.array(test_data['returns']).reshape(-1, 1))
+    state_probs = hmm_model.predict_proba(np.array(test_data['returns']).reshape(-1, 1))
+    state_probs = pd.DataFrame(state_probs, index=test_data.index)
 
-    # Entraînement du modèle GMM sur les mêmes données
-    gmm_model = GaussianMixture(n_components=2, covariance_type='full', random_state=42)
-    gmm_model.fit(np.array(train_data['returns']).reshape(-1, 1))
-
-    # Prédiction des régimes de marché avec GMM sur les données de test
-    hidden_states_gmm = gmm_model.predict(np.array(test_data['returns']).reshape(-1, 1))
-    state_probs_gmm = gmm_model.predict_proba(np.array(test_data['returns']).reshape(-1, 1))
-    state_probs_gmm = pd.DataFrame(state_probs_gmm, index=test_data.index)
-
-    # Télécharger les données des actions
+    # Télécharger les données des actions jusqu'à aujourd'hui
     start_date = test_data.index[0]
-    end_date = test_data.index[-1]
-    stock_data = get_stock_data(list(stocks.keys()), start=start_date, end=end_date)
+    stock_data = get_stock_data(list(stocks.keys()), start=start_date)
 
     # Calculer les rendements du portefeuille pondéré
     portfolio_returns = calculate_portfolio_returns(stocks, stock_data)
 
-    # Calcul des métriques du portefeuille
-    sharpe_ratio, max_dd, volatility = calculate_metrics(portfolio_returns)
-    st.subheader('Métriques du Portefeuille')
-    st.write(f"Sharpe Ratio : {sharpe_ratio:.2f}")
-    st.write(f"Max Drawdown : {max_dd:.2%}")
-    st.write(f"Volatilité (Annualisée) : {volatility:.2%}")
+    # Calcul des betas des actions par rapport au S&P 500
+    betas = calculate_betas(stock_data, gspc_data)
+    st.write("Betas des actions par rapport au S&P 500 :")
+    for stock, beta in betas.items():
+        st.write(f"{stock} : {beta:.2f}")
 
-    # Graphique des régimes de marché détectés par HMM
+    # Calcul du beta du portefeuille
+    portfolio_beta = calculate_portfolio_beta(betas, stocks)
+    st.write(f"Beta du portefeuille : {portfolio_beta:.2f}")
+
+    # Stress Testing avec plusieurs scénarios (chute de 10%, 20%, 30%)
+    st.subheader('Stress Testing : Scénarios de Chute du Marché')
+    for stress_level in [-0.1, -0.2, -0.3]:  # Chute de 10%, 20%, 30%
+        stressed_return = stress_test_with_beta(portfolio_beta, stress_level)
+        st.write(f"Scénario de Chute de {int(abs(stress_level * 100))}% du S&P 500 :")
+        st.write(f"Rendement simulé du portefeuille : {stressed_return:.2%}")
+
+    # Graphique des régimes de marché détectés
     st.subheader("Régimes de Marché Détectés par le HMM")
-    test_data['Regime HMM'] = hidden_states_hmm
-    fig_hmm_regimes = px.scatter(test_data, x=test_data.index, y='Adj Close', color='Regime HMM', title="Régimes de Marché Détectés par HMM", color_discrete_sequence=custom_color_palette)
-    st.plotly_chart(fig_hmm_regimes)
-
-    # Graphique des régimes de marché détectés par GMM
-    st.subheader("Régimes de Marché Détectés par le GMM")
-    test_data['Regime GMM'] = hidden_states_gmm
-    fig_gmm_regimes = px.scatter(test_data, x=test_data.index, y='Adj Close', color='Regime GMM', title="Régimes de Marché Détectés par GMM", color_discrete_sequence=custom_color_palette)
-    st.plotly_chart(fig_gmm_regimes)
+    test_data['Regime'] = hidden_states
+    fig_regimes = px.scatter(test_data, x=test_data.index, y='Adj Close', color='Regime', title="Régimes de Marché Détectés", color_discrete_sequence=custom_color_palette)
+    st.plotly_chart(fig_regimes)
 
     # Graphique en camembert des pondérations du portefeuille
     st.subheader('Pondérations du Portefeuille')
     fig_pie = px.pie(values=list(stocks.values()), names=list(stocks.keys()), title='Pondérations des Sociétés dans le Portefeuille', color_discrete_sequence=custom_color_palette)
     st.plotly_chart(fig_pie)
 
-    # Affichage des probabilités de changement de régime pour HMM
-    st.subheader("Probabilités de Changement de Régime pour HMM")
-    fig_hmm_probs = px.line(state_probs_hmm, title='Probabilités des Régimes de Marché (HMM)',
-                            labels={'value': 'Probabilité', 'index': 'Date'},
-                            color_discrete_sequence=custom_color_palette)
-    st.plotly_chart(fig_hmm_probs)
+    # Affichage des probabilités de changement de régime
+    st.subheader("Probabilités de Changement de Régime")
 
-    # Affichage des probabilités de changement de régime pour GMM
-    st.subheader("Probabilités de Changement de Régime pour GMM")
-    fig_gmm_probs = px.line(state_probs_gmm, title='Probabilités des Régimes de Marché (GMM)',
-                            labels={'value': 'Probabilité', 'index': 'Date'},
-                            color_discrete_sequence=custom_color_palette)
-    st.plotly_chart(fig_gmm_probs)
+    # Graphique des probabilités des régimes de marché
+    fig_probs = px.line(state_probs, title='Probabilités des Régimes de Marché',
+                        labels={'value': 'Probabilité', 'index': 'Date'},
+                        color_discrete_sequence=custom_color_palette)
+    st.plotly_chart(fig_probs)
 
-    # Afficher les probabilités du dernier jour pour HMM
-    last_day_probs_hmm = state_probs_hmm.iloc[-1]
-    st.write("Probabilités de Régime (HMM) pour le Dernier Jour:")
-    for regime, prob in enumerate(last_day_probs_hmm):
+    # Afficher les probabilités du dernier jour
+    last_day_probs = state_probs.iloc[-1]
+    st.write("Probabilités de Régime pour le Dernier Jour:")
+    for regime, prob in enumerate(last_day_probs):
         st.write(f"Régime {regime}: {prob:.2%}")
 
-    # Afficher les probabilités du dernier jour pour GMM
-    last_day_probs_gmm = state_probs_gmm.iloc[-1]
-    st.write("Probabilités de Régime (GMM) pour le Dernier Jour:")
-    for regime, prob in enumerate(last_day_probs_gmm):
-        st.write(f"Régime {regime}: {prob:.2%}")
 

@@ -7,6 +7,8 @@ from hmmlearn import hmm
 from sklearn.mixture import GaussianMixture
 from quantstats.stats import sharpe, max_drawdown
 from PIL import Image
+from IPython import get_ipython
+
 
 # Actions et leurs pondérations
 stocks = {

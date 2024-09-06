@@ -5,6 +5,7 @@ import pandas as pd
 import plotly.express as px
 from hmmlearn.hmm import GaussianHMM
 from PIL import Image
+from sklearn.linear_model import LinearRegression
 
 # Actions et leurs pondérations
 stocks = {
@@ -49,18 +50,30 @@ def calculate_portfolio_returns(stocks, stock_data):
     portfolio_returns['Portfolio'] = portfolio_returns.sum(axis=1)
     return portfolio_returns['Portfolio']
 
-# Calcul du stress test
-def stress_test(stock_data, stress_level, correlation_matrix):
-    stressed_stock_data = stock_data.copy()
-    for ticker in stressed_stock_data.keys():
-        # Appliquer une chute pondérée en fonction des corrélations
-        correlation_factor = correlation_matrix[ticker].mean()  # Utiliser la corrélation moyenne
-        stressed_stock_data[ticker]['Adj Close'] *= (1 + stress_level * correlation_factor)
-    return stressed_stock_data
+# Fonction pour calculer le Beta de chaque action par rapport au S&P 500
+def calculate_betas(stock_data, gspc_data):
+    betas = {}
+    gspc_returns = gspc_data['returns'].iloc[1:].values.reshape(-1, 1)  # Retours du S&P 500
+    for stock in stock_data:
+        stock_returns = stock_data[stock]['Daily Return'].values.reshape(-1, 1)[1:]
+        reg = LinearRegression().fit(gspc_returns, stock_returns)
+        betas[stock] = reg.coef_[0][0]
+    return betas
+
+# Calcul du Beta du portefeuille
+def calculate_portfolio_beta(betas, stocks):
+    portfolio_beta = 0
+    for stock, weight in stocks.items():
+        portfolio_beta += betas[stock] * (weight / 100)
+    return portfolio_beta
+
+# Stress Testing basé sur le Beta du portefeuille
+def stress_test_with_beta(portfolio_beta, stress_level):
+    return portfolio_beta * stress_level
 
 # Télécharger les données du S&P 500
 st.title("Olympe Financial Group - Tableau de Bord")
-st.write("Analyse des rendements du portefeuille basé sur un modèle HMM avec Stress Test.")
+st.write("Analyse des rendements du portefeuille basé sur un modèle HMM avec Stress Test et Beta du portefeuille.")
 
 gspc_data = get_market_data()
 
@@ -106,18 +119,22 @@ else:
     # Calculer les rendements du portefeuille pondéré
     portfolio_returns = calculate_portfolio_returns(stocks, stock_data)
 
-    # Calcul de la matrice de corrélation
-    stock_returns = pd.DataFrame({ticker: stock_data[ticker]['Daily Return'] for ticker in stocks.keys()})
-    correlation_matrix = stock_returns.corr()
+    # Calcul des betas des actions par rapport au S&P 500
+    betas = calculate_betas(stock_data, gspc_data)
+    st.write("Betas des actions par rapport au S&P 500 :")
+    for stock, beta in betas.items():
+        st.write(f"{stock} : {beta:.2f}")
 
-    # Stress Testing avec plusieurs scénarios
+    # Calcul du beta du portefeuille
+    portfolio_beta = calculate_portfolio_beta(betas, stocks)
+    st.write(f"Beta du portefeuille : {portfolio_beta:.2f}")
+
+    # Stress Testing avec plusieurs scénarios (chute de 10%, 20%, 30%)
     st.subheader('Stress Testing : Scénarios de Chute du Marché')
-
     for stress_level in [-0.1, -0.2, -0.3]:  # Chute de 10%, 20%, 30%
-        stressed_stock_data = stress_test(stock_data, stress_level, correlation_matrix)
-        stressed_portfolio_returns = calculate_portfolio_returns(stocks, stressed_stock_data)
-        st.write(f"Scénario de Chute de {int(abs(stress_level * 100))}% :")
-        st.write(f"Rendement simulé du portefeuille : {stressed_portfolio_returns.mean():.2%}")
+        stressed_return = stress_test_with_beta(portfolio_beta, stress_level)
+        st.write(f"Scénario de Chute de {int(abs(stress_level * 100))}% du S&P 500 :")
+        st.write(f"Rendement simulé du portefeuille : {stressed_return:.2%}")
 
     # Graphique des régimes de marché détectés
     st.subheader("Régimes de Marché Détectés par le HMM")
@@ -144,3 +161,4 @@ else:
     st.write("Probabilités de Régime pour le Dernier Jour:")
     for regime, prob in enumerate(last_day_probs):
         st.write(f"Régime {regime}: {prob:.2%}")
+

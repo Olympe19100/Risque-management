@@ -22,7 +22,7 @@ stocks = {
 }
 
 # Charger et afficher le logo
-logo = Image.open(r"Olympe Financial group (Logo) (1).png")
+logo = Image.open(r"C:\Users\Hamid\Desktop\Trading Olympe\Olympe Financial group (Logo) (1).png")
 st.image(logo, width=200)  # Afficher le logo
 
 # Personnalisation des couleurs pour correspondre à la charte graphique
@@ -78,8 +78,8 @@ def apply_cvar_risk_management(returns, cvar_threshold, window=252):
     managed_returns[risk_management_exit] = 0  # Appliquer la gestion en remplaçant les rendements par 0
     return managed_returns
 
-# Fonction pour appliquer la stratégie Long/Short/Cash
-def apply_long_short_cash_strategy(returns, state_probs, cash_threshold, leverage):
+# Fonction pour appliquer la stratégie Investi ou Cash
+def apply_invest_or_cash_strategy(returns, state_probs, cash_threshold, leverage):
     # Assurons-nous que returns et state_probs ont le même index
     common_index = returns.index.intersection(state_probs.index)
     returns = returns.loc[common_index]
@@ -87,15 +87,14 @@ def apply_long_short_cash_strategy(returns, state_probs, cash_threshold, leverag
     
     # state_probs.iloc[:, 0] est la probabilité de l'état haussier
     market_regime = np.where(
-        state_probs.iloc[:, 0] > (1 - cash_threshold), 0,  # Long (très probablement haussier)
-        np.where(state_probs.iloc[:, 0] < cash_threshold, 1,  # Short (très probablement baissier)
-                 2)  # Cash (incertain)
+        state_probs.iloc[:, 0] > (1 - cash_threshold), 0,  # Investi (régime haussier)
+        1  # Cash (régime baissier)
     )
     
+    # Si régime est 0, on investit avec levier, sinon cash (rendement = 0)
     strategy_returns = np.where(
-        market_regime == 0, returns * leverage,  # Long
-        np.where(market_regime == 1, -returns * leverage,  # Short
-                 0)  # Cash
+        market_regime == 0, returns * leverage,  # Investi avec levier
+        0  # Cash
     )
     
     return pd.Series(strategy_returns, index=common_index)
@@ -148,10 +147,8 @@ else:
     
     if current_state_prob > (1 - cash_threshold):
         st.info("Régime actuel : Bullish (Haussier). Recommandation : Position Long.")
-    elif current_state_prob < cash_threshold:
-        st.warning("Régime actuel : Bearish (Baissier). Recommandation : Position Short.")
     else:
-        st.info("Régime actuel : Incertain. Recommandation : Position Cash.")
+        st.info("Régime actuel : Bearish (Baissier). Recommandation : Position Cash.")
 
     # Télécharger les données des actions
     start_date = test_data.index[0]
@@ -161,8 +158,8 @@ else:
     # Calculer les rendements du portefeuille pondéré
     portfolio_returns = calculate_portfolio_returns(stocks, stock_data)
 
-    # Appliquer la stratégie Long/Short/Cash
-    strategy_returns = apply_long_short_cash_strategy(portfolio_returns, state_probs, cash_threshold, leverage)
+    # Appliquer la stratégie Investi ou Cash
+    strategy_returns = apply_invest_or_cash_strategy(portfolio_returns, state_probs, cash_threshold, leverage)
 
     # Application de la gestion des risques basée sur la CVaR
     managed_returns = apply_cvar_risk_management(strategy_returns, cvar_threshold)
@@ -186,10 +183,10 @@ else:
     else:
         st.success(f"CVaR sous contrôle ({cvar:.2%}).")
 
-    # Graphique des rendements gérés avec stratégie Long/Short/Cash et CVaR
+    # Graphique des rendements gérés avec stratégie Investi ou Cash et CVaR
     cumulative_managed_returns = (1 + managed_returns).cumprod()
-    st.subheader('Rendements Cumulés du Portefeuille avec Stratégie Long/Short/Cash et Gestion des Risques')
-    fig_cvar = px.line(cumulative_managed_returns, title='Rendements Cumulés (Stratégie Long/Short/Cash avec Gestion des Risques)', color_discrete_sequence=custom_color_palette)
+    st.subheader('Rendements Cumulés du Portefeuille avec Stratégie Investi/Cash et Gestion des Risques')
+    fig_cvar = px.line(cumulative_managed_returns, title='Rendements Cumulés (Stratégie Investi/Cash avec Gestion des Risques)', color_discrete_sequence=custom_color_palette)
     st.plotly_chart(fig_cvar)
 
     # Graphique des régimes de marché détectés
@@ -202,5 +199,6 @@ else:
     st.subheader('Pondérations du Portefeuille')
     fig_pie = px.pie(values=list(stocks.values()), names=list(stocks.keys()), title='Pondérations des Sociétés dans le Portefeuille', color_discrete_sequence=custom_color_palette)
     st.plotly_chart(fig_pie)
+
 
 

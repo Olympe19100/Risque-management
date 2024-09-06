@@ -2,17 +2,18 @@ import streamlit as st
 import yfinance as yf
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
+import plotly.express as px
 from hmmlearn.hmm import GaussianHMM
 from quantstats.stats import sharpe, max_drawdown
 from PIL import Image
 
 # Seuils pour la stratégie
-cash_threshold = 0.0156
-cvar_threshold = 0.0438
-train_window = 22000  # Taille de la fenêtre d'entraînement (22 000 points de données)
+cash_threshold = 0.0208  # Mise à jour du seuil pour l'état "cash"
+cvar_threshold = 0.0569
+leverage = 2
+train_window = 22000
 
-# Actions et leurs pondérations
+# Actions et leurs pondérations (inchangées)
 stocks = {
     'AAPL': 0.76, 'MSFT': 12.85, 'GOOG': 1.68, 'AMZN': 1.74, 'META': 5.26,
     'NVDA': 15.25, 'V': 2.07, 'MA': 3.51, 'BRK-B': 0.53, 'JPM': 1.47,
@@ -21,13 +22,11 @@ stocks = {
 }
 
 # Charger et afficher le logo
-logo = Image.open(r"Olympe Financial group (Logo) (1).png")
-st.image(logo, width=200)  # Afficher le logo
+logo = Image.open(r"C:\Users\Hamid\Desktop\Trading Olympe\Olympe Financial group (Logo) (1).png")
+st.image(logo, width=200)
 
-# Personnalisation des couleurs pour correspondre à la charte graphique
 custom_color_palette = ['#D4AF37', '#343a40', '#007bff']
 
-# Télécharger et préparer les données du S&P 500 (^GSPC)
 @st.cache_data
 def get_market_data():
     data = yf.download('^GSPC')
@@ -35,65 +34,12 @@ def get_market_data():
     data.dropna(inplace=True)
     return data[['Adj Close', 'returns']]
 
-# Fonction pour télécharger les données des actions
-@st.cache_data
-def get_stock_data(_tickers, start, end):
-    stock_data = {}
-    for ticker in _tickers:
-        data = yf.download(ticker, start=start, end=end)
-        data['Daily Return'] = data['Adj Close'].pct_change()
-        data.dropna(inplace=True)
-        stock_data[ticker] = data
-    return stock_data
+# Autres fonctions inchangées...
 
-# Calcul des rendements pondérés du portefeuille
-def calculate_portfolio_returns(stocks, stock_data):
-    portfolio_returns = pd.DataFrame(index=stock_data[next(iter(stocks))].index)
-    for stock, weight in stocks.items():
-        stock_returns = stock_data[stock]['Daily Return']
-        portfolio_returns[stock] = stock_returns * (weight / 100)
-    portfolio_returns['Portfolio'] = portfolio_returns.sum(axis=1)
-    return portfolio_returns['Portfolio']
-
-# Calcul des métriques pour le portefeuille
-def calculate_metrics(returns):
-    sharpe_ratio = sharpe(returns)
-    max_dd = max_drawdown(returns)
-    volatility = returns.std() * np.sqrt(252)  # Annualisée
-    return sharpe_ratio, max_dd, volatility
-
-# Fonction pour calculer la CVaR
-def calculate_cvar(returns, confidence_level=0.95, window=252):
-    sorted_returns = np.sort(returns)
-    index = int((1 - confidence_level) * len(sorted_returns))
-    cvar = -sorted_returns[:index].mean()  # Moyenne des pires pertes
-    return cvar
-
-# Fonction pour appliquer la gestion des risques basée sur CVaR
-def apply_cvar_risk_management(returns, cvar_threshold, window=252):
-    cvar_series = returns.rolling(window=window).apply(lambda x: calculate_cvar(x, window=window), raw=False)
-    risk_management_exit = cvar_series > cvar_threshold  # Si CVaR dépasse le seuil, on sort du marché
-    managed_returns = returns.copy()
-    managed_returns[risk_management_exit] = 0  # Appliquer la gestion en remplaçant les rendements par 0
-    return managed_returns
-
-# Nouvelle fonction pour appliquer la stratégie buy and hold
-def apply_buy_hold_strategy(returns, state_probs, cash_threshold):
-    common_index = returns.index.intersection(state_probs.index)
-    returns = returns.loc[common_index]
-    state_probs = state_probs.loc[common_index]
-    
-    market_regime = np.where(state_probs.iloc[:, 0] > (1 - cash_threshold), 1, 0)  # 1 pour buy, 0 pour cash
-    
-    strategy_returns = np.where(market_regime == 1, returns, 0)  # Appliquer les rendements seulement en position buy
-    
-    return pd.Series(strategy_returns, index=common_index)
-
-# Interface utilisateur Streamlit
+# Télécharger les données du S&P 500
 st.title("Olympe Financial Group - Tableau de Bord")
 st.write("Analyse des rendements du portefeuille basé sur un modèle HMM et gestion des risques via la CVaR.")
 
-# Télécharger les données du S&P 500
 gspc_data = get_market_data()
 
 # Affichage du nombre total de lignes
@@ -127,7 +73,31 @@ else:
     # Prédiction des régimes de marché sur les données de test
     hidden_states = hmm_model.predict(np.array(test_data['returns']).reshape(-1, 1))
     state_probs = hmm_model.predict_proba(np.array(test_data['returns']).reshape(-1, 1))
-    state_probs = pd.DataFrame(state_probs, index=test_data.index)
+    
+    # Créer une nouvelle colonne pour le régime de marché incluant l'état "cash"
+    test_data['market_regime'] = np.where(
+        (state_probs[:, 0] > cash_threshold) & (state_probs[:, 0] < (1 - cash_threshold)),
+        2,  # État "cash"
+        hidden_states
+    )
+
+    # Affichage de la matrice de transition
+    transition_matrix = hmm_model.transmat_
+    st.subheader('Matrice de Transition')
+    st.write(pd.DataFrame(transition_matrix))
+
+    # Détection du régime actuel et probabilités
+    current_state_prob = state_probs[-1, 0]  # Probabilité de l'état haussier
+    st.subheader('Probabilités de Transition Actuelles')
+    st.write(f"Probabilité état haussier (Long) : {current_state_prob:.2%}")
+    st.write(f"Probabilité état baissier (Short) : {1 - current_state_prob:.2%}")
+    
+    if current_state_prob > (1 - cash_threshold):
+        st.info("Régime actuel : Bullish (Haussier). Recommandation : Position Long.")
+    elif current_state_prob < cash_threshold:
+        st.warning("Régime actuel : Bearish (Baissier). Recommandation : Position Short.")
+    else:
+        st.info("Régime actuel : Incertain. Recommandation : Position Cash.")
 
     # Télécharger les données des actions
     start_date = test_data.index[0]
@@ -137,8 +107,8 @@ else:
     # Calculer les rendements du portefeuille pondéré
     portfolio_returns = calculate_portfolio_returns(stocks, stock_data)
 
-    # Appliquer la stratégie Buy and Hold
-    strategy_returns = apply_buy_hold_strategy(portfolio_returns, state_probs, cash_threshold)
+    # Appliquer la stratégie Long/Short/Cash
+    strategy_returns = apply_long_short_cash_strategy(portfolio_returns, pd.DataFrame(state_probs, index=test_data.index), cash_threshold, leverage)
 
     # Application de la gestion des risques basée sur la CVaR
     managed_returns = apply_cvar_risk_management(strategy_returns, cvar_threshold)
@@ -162,43 +132,22 @@ else:
     else:
         st.success(f"CVaR sous contrôle ({cvar:.2%}).")
 
-    # Graphique des rendements gérés avec stratégie Buy and Hold et CVaR
+    # Graphique des rendements gérés avec stratégie Long/Short/Cash et CVaR
     cumulative_managed_returns = (1 + managed_returns).cumprod()
-    
-    fig, ax = plt.subplots(figsize=(12, 6))
-    ax.plot(cumulative_managed_returns.index, cumulative_managed_returns.values)
-    ax.set_title('Rendements Cumulés (Stratégie Buy and Hold avec Gestion des Risques)')
-    ax.set_xlabel('Date')
-    ax.set_ylabel('Rendements Cumulés')
-    st.pyplot(fig)
+    st.subheader('Rendements Cumulés du Portefeuille avec Stratégie Long/Short/Cash et Gestion des Risques')
+    fig_cvar = px.line(cumulative_managed_returns, title='Rendements Cumulés (Stratégie Long/Short/Cash avec Gestion des Risques)', color_discrete_sequence=custom_color_palette)
+    st.plotly_chart(fig_cvar)
 
-    # Graphique des régimes de marché détectés avec Matplotlib
+    # Graphique des régimes de marché détectés
     st.subheader("Régimes de Marché Détectés par le HMM")
-    
-    fig, ax = plt.subplots(figsize=(12, 6))
-    ax.scatter(test_data.index, test_data['Adj Close'], c=hidden_states, cmap='viridis')
-    ax.set_title("Régimes de Marché Détectés")
-    ax.set_xlabel('Date')
-    ax.set_ylabel('Prix Ajusté de Clôture')
-    st.pyplot(fig)
+    fig_regimes = px.scatter(test_data, x=test_data.index, y='Adj Close', color='market_regime', 
+                             title="Régimes de Marché Détectés", 
+                             color_discrete_map={0: 'blue', 1: 'Gold', 2: 'gray'},
+                             labels={'market_regime': 'Régime de Marché'})
+    st.plotly_chart(fig_regimes)
 
     # Graphique en camembert des pondérations du portefeuille
     st.subheader('Pondérations du Portefeuille')
-    
-    fig, ax = plt.subplots(figsize=(10, 10))
-    ax.pie(list(stocks.values()), labels=list(stocks.keys()), autopct='%1.1f%%', startangle=90)
-    ax.set_title('Pondérations des Sociétés dans le Portefeuille')
-    st.pyplot(fig)
-
-    # Détection du régime actuel et probabilités
-    current_state_prob = state_probs.iloc[-1, 0]  # Probabilité de l'état haussier
-    current_probs = state_probs.iloc[-1]  # Probabilités des états
-    st.subheader('Probabilités de Transition Actuelles')
-    st.write(f"Probabilité état haussier (Buy) : {current_probs[0]:.2%}")
-    st.write(f"Probabilité état baissier (Cash) : {current_probs[1]:.2%}")
-
-    if current_state_prob > (1 - cash_threshold):
-        st.info("Régime actuel : Bullish (Haussier). Recommandation : Conserver les positions (Buy).")
-    else:
-        st.warning("Régime actuel : Bearish (Baissier) ou Incertain. Recommandation : Détenir en espèces (Cash).")
+    fig_pie = px.pie(values=list(stocks.values()), names=list(stocks.keys()), title='Pondérations des Sociétés dans le Portefeuille', color_discrete_sequence=custom_color_palette)
+    st.plotly_chart(fig_pie)
 

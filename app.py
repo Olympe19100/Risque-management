@@ -50,6 +50,13 @@ def calculate_portfolio_returns(stocks, stock_data):
     portfolio_returns['Portfolio'] = portfolio_returns.sum(axis=1)
     return portfolio_returns['Portfolio']
 
+# Calcul des métriques du portefeuille
+def calculate_metrics(portfolio_returns):
+    sharpe_ratio = sharpe(portfolio_returns)
+    max_dd = max_drawdown(portfolio_returns)
+    volatility = np.std(portfolio_returns) * np.sqrt(252)  # Annualized volatility
+    return sharpe_ratio, max_dd, volatility
+
 # Télécharger les données du S&P 500
 st.title("Olympe Financial Group - Tableau de Bord")
 st.write("Analyse des rendements du portefeuille basé sur un modèle HMM.")
@@ -115,4 +122,20 @@ else:
     st.subheader('Pondérations du Portefeuille')
     fig_pie = px.pie(values=list(stocks.values()), names=list(stocks.keys()), title='Pondérations des Sociétés dans le Portefeuille', color_discrete_sequence=custom_color_palette)
     st.plotly_chart(fig_pie)
+
+    # Affichage des probabilités de changement de régime
+    st.subheader("Probabilités de Changement de Régime")
+
+    # Graphique des probabilités des régimes de marché
+    fig_probs = px.line(state_probs, title='Probabilités des Régimes de Marché',
+                        labels={'value': 'Probabilité', 'index': 'Date'},
+                        color_discrete_sequence=custom_color_palette)
+    st.plotly_chart(fig_probs)
+
+    # Afficher les probabilités du dernier jour
+    last_day_probs = state_probs.iloc[-1]
+    st.write("Probabilités de Régime pour le Dernier Jour:")
+    for regime, prob in enumerate(last_day_probs):
+        st.write(f"Régime {regime}: {prob:.2%}")
+
 

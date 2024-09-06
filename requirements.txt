@@ -4,3 +4,4 @@ hmmlearn
 plotly
 Pillow
 IPython
+VECTORBT

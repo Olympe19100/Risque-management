@@ -16,7 +16,7 @@ stocks = {
 # Télécharger et préparer les données du S&P 500 (^GSPC)
 @st.cache_data
 def get_market_data():
-    data = yf.download('^GSPC', start='2010-01-01')
+    data = yf.download('^GSPC', start='1951-01-01')
     data['returns'] = np.log(data['Adj Close']) - np.log(data['Adj Close'].shift(1))
     data.dropna(inplace=True)
     return data[['Adj Close', 'returns']]

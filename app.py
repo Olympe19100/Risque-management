@@ -146,24 +146,12 @@ else:
                             color_discrete_sequence=custom_color_palette)
     st.plotly_chart(fig_hmm_probs)
 
-    # Affichage des probabilités de changement de régime pour GMM
-    st.subheader("Probabilités de Changement de Régime pour GMM")
-    fig_gmm_probs = px.line(state_probs_gmm, title='Probabilités des Régimes de Marché (GMM)',
-                            labels={'value': 'Probabilité', 'index': 'Date'},
-                            color_discrete_sequence=custom_color_palette)
-    st.plotly_chart(fig_gmm_probs)
-
     # Afficher les probabilités du dernier jour pour HMM
     last_day_probs_hmm = state_probs_hmm.iloc[-1]
     st.write("Probabilités de Régime (HMM) pour le Dernier Jour:")
     for regime, prob in enumerate(last_day_probs_hmm):
         st.write(f"Régime {regime}: {prob:.2%}")
 
-    # Afficher les probabilités du dernier jour pour GMM
-    last_day_probs_gmm = state_probs_gmm.iloc[-1]
-    st.write("Probabilités de Régime (GMM) pour le Dernier Jour:")
-    for regime, prob in enumerate(last_day_probs_gmm):
-        st.write(f"Régime {regime}: {prob:.2%}")
 
 
 

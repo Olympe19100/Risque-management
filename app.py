@@ -8,8 +8,8 @@ from quantstats.stats import sharpe, max_drawdown
 from PIL import Image
 
 # Seuils pour la stratégie
-cash_threshold = 0.0295  # Seuil pour entrer en position "cash" dans HMM
-cvar_threshold = 0.0269  # Seuil de CVaR pour sortir du marché
+cash_threshold = 0.0145  # Seuil pour entrer en position "cash" dans HMM
+cvar_threshold = 0.0569  # Seuil de CVaR pour sortir du marché
 leverage = 1  # Levier à appliquer
 train_window = 22000  # Taille de la fenêtre d'entraînement (22 000 points de données)
 
@@ -29,6 +29,7 @@ st.image(logo, width=200)  # Afficher le logo
 custom_color_palette = ['#D4AF37', '#343a40', '#007bff']
 
 # Télécharger et préparer les données du S&P 500 (^GSPC)
+@st.cache_data
 def get_market_data():
     data = yf.download('^GSPC')
     data['returns'] = np.log(data['Adj Close']) - np.log(data['Adj Close'].shift(1))
@@ -201,5 +202,3 @@ else:
     st.subheader('Pondérations du Portefeuille')
     fig_pie = px.pie(values=list(stocks.values()), names=list(stocks.keys()), title='Pondérations des Sociétés dans le Portefeuille', color_discrete_sequence=custom_color_palette)
     st.plotly_chart(fig_pie)
-
-

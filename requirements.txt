@@ -7,4 +7,5 @@ hmmlearn
 scikit-learn
 quantstats
 Pillow
+ipython
 

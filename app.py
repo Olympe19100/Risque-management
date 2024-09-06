@@ -8,8 +8,8 @@ from quantstats.stats import sharpe, max_drawdown
 from PIL import Image
 
 # Seuils pour la stratégie
-cash_threshold = 0.0156  # Seuil pour entrer en position "cash" dans HMM
-cvar_threshold = 0.0238  # Seuil de CVaR pour sortir du marché
+cash_threshold = 0.0156  # Seuil pour entrer en position "long" dans HMM
+cvar_threshold = 0.0238  # Seuil de CVaR pour passer en "cash"
 leverage = 1  # Levier à appliquer
 train_window = 22000  # Taille de la fenêtre d'entraînement (22 000 points de données)
 
@@ -197,4 +197,5 @@ else:
     st.subheader('Pondérations du Portefeuille')
     fig_pie = px.pie(values=list(stocks.values()), names=list(stocks.keys()), title='Pondérations des Sociétés dans le Portefeuille', color_discrete_sequence=custom_color_palette)
     st.plotly_chart(fig_pie)
+
 

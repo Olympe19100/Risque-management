@@ -84,24 +84,4 @@ plt.ylabel('Fréquence')
 plt.legend()
 st.pyplot(plt)
 
-# Analyse de la performance du portefeuille avec Quantstats
-qs.extend_pandas()
-
-st.subheader("Statistiques de performance")
-
-sharpe_ratio = hmm_returns.sharpe()
-sortino_ratio = hmm_returns.sortino()
-max_drawdown = hmm_returns.max_drawdown()
-
-st.write(f"Sharpe Ratio : {sharpe_ratio:.2f}")
-st.write(f"Sortino Ratio : {sortino_ratio:.2f}")
-st.write(f"Max Drawdown : {max_drawdown:.2%}")
-
-# Générer un rapport complet
-st.subheader("Rapport complet de performance")
-report_html = 'rapport_performance.html'
-qs.reports.html(hmm_returns, benchmark=benchmark_returns, output=report_html)
-
-with open(report_html, 'rb') as f:
-    st.download_button("Télécharger le rapport de performance", data=f, file_name=report_html)
 

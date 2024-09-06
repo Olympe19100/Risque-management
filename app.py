@@ -4,7 +4,6 @@ import numpy as np
 import pandas as pd
 import plotly.express as px
 from hmmlearn.hmm import GaussianHMM
-from quantstats.stats import sharpe, max_drawdown
 from PIL import Image
 
 # Seuils pour la stratégie

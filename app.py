@@ -11,7 +11,6 @@ from PIL import Image
 cash_threshold = 0.0156  # Seuil pour entrer en position "long" dans HMM
 cvar_threshold = 0.0238  # Seuil de CVaR pour passer en "cash"
 leverage = 1  # Levier à appliquer
-train_window = 4000  # Taille de la fenêtre d'entraînement (22 000 points de données)
 
 # Actions et leurs pondérations
 stocks = {
@@ -24,10 +23,10 @@ stocks = {
 # Personnalisation des couleurs pour correspondre à la charte graphique
 custom_color_palette = ['#D4AF37', '#343a40', '#007bff']
 
-# Télécharger et préparer les données du S&P 500 (^GSPC)
+# Télécharger et préparer les données du S&P 500 depuis 1951
 @st.cache_data
 def get_market_data():
-    data = yf.download('^GSPC')
+    data = yf.download('^GSPC', start='1951-01-01')
     data['returns'] = np.log(data['Adj Close']) - np.log(data['Adj Close'].shift(1))
     data.dropna(inplace=True)
     return data[['Adj Close', 'returns']]
@@ -119,17 +118,17 @@ if investment > 0:
 if gspc_data.empty:
     st.error("Les données du S&P 500 sont vides.")
 else:
-    # Diviser les données en entraînement (22 000 points) et test
-    train_data = gspc_data.iloc[:train_window]
-    test_data = gspc_data.iloc[train_window:]
+    # Diviser les données en période d'entraînement (1951-2017) et de test (2018 à aujourd'hui)
+    train_data = gspc_data[gspc_data.index < '2018-01-01']  # Période d'entraînement : avant 2018
+    test_data = gspc_data[gspc_data.index >= '2018-01-01']  # Période de test : 2018 à aujourd'hui
 
-    # Entraînement du modèle HMM sur les 22 000 premiers points
+    # Entraînement du modèle HMM sur les données historiques (1951-2017)
     np.random.seed(42)
     hmm_model = GaussianHMM(n_components=2, covariance_type="full", n_iter=100000)
     hmm_model.fit(np.array(train_data['returns']).reshape(-1, 1))
     st.write(f"Score du modèle HMM : {hmm_model.score(np.array(train_data['returns']).reshape(-1, 1))}")
 
-    # Prédiction des régimes de marché sur les données de test
+    # Prédiction des régimes de marché sur les données de test (2018 à aujourd'hui)
     hidden_states = hmm_model.predict(np.array(test_data['returns']).reshape(-1, 1))
     state_probs = hmm_model.predict_proba(np.array(test_data['returns']).reshape(-1, 1))
     state_probs = pd.DataFrame(state_probs, index=test_data.index)
@@ -146,7 +145,7 @@ else:
     else:
         st.warning("Régime actuel : Bearish (Baissier). Recommandation : Rester en Cash.")
 
-    # Télécharger les données des actions
+    # Télécharger les données des actions depuis 2018
     start_date = test_data.index[0]
     end_date = test_data.index[-1]
     stock_data = get_stock_data(list(stocks.keys()), start=start_date, end=end_date)
@@ -197,5 +196,6 @@ else:
     st.subheader('Pondérations du Portefeuille')
     fig_pie = px.pie(values=list(stocks.values()), names=list(stocks.keys()), title='Pondérations des Sociétés dans le Portefeuille', color_discrete_sequence=custom_color_palette)
     st.plotly_chart(fig_pie)
+
 
 

@@ -23,7 +23,7 @@ st.image(logo, width=200)  # Afficher le logo
 # Personnalisation des couleurs pour correspondre à la charte graphique
 custom_color_palette = ['#D4AF37', '#343a40', '#007bff']
 
-# Télécharger et préparer les données du S&P 500 (^GSPC)
+# Fonction pour télécharger les données des actions jusqu'à aujourd'hui
 @st.cache_data
 def get_stock_data(_tickers, start, end=None):
     """
@@ -39,7 +39,7 @@ def get_stock_data(_tickers, start, end=None):
     dict : un dictionnaire contenant les données de chaque action avec les rendements quotidiens
     """
     if end is None:
-        end = datetime.today().strftime('%Y-%m-%d')  # Utiliser la date d'aujourd'hui si end n'est pas fourni
+        end = datetime.now().strftime('%Y-%m-%d')  # Utiliser la date d'aujourd'hui si end n'est pas fourni
 
     stock_data = {}
     for ticker in _tickers:
@@ -50,16 +50,20 @@ def get_stock_data(_tickers, start, end=None):
     
     return stock_data
 
-# Fonction pour télécharger les données des actions
+# Fonction pour télécharger les données du S&P 500 jusqu'à aujourd'hui
 @st.cache_data
-def get_stock_data(_tickers, start, end):
-    stock_data = {}
-    for ticker in _tickers:
-        data = yf.download(ticker, start=start, end=end)
-        data['Daily Return'] = data['Adj Close'].pct_change()
-        data.dropna(inplace=True)
-        stock_data[ticker] = data
-    return stock_data
+def get_market_data():
+    """
+    Télécharger et préparer les données du S&P 500 jusqu'à aujourd'hui.
+    
+    Returns:
+    pandas.DataFrame : dataframe contenant les prix ajustés et les rendements du S&P 500
+    """
+    end = datetime.now().strftime('%Y-%m-%d')  # Date de fin est aujourd'hui
+    data = yf.download('^GSPC', end=end)
+    data['returns'] = np.log(data['Adj Close']) - np.log(data['Adj Close'].shift(1))
+    data.dropna(inplace=True)
+    return data[['Adj Close', 'returns']]
 
 # Calcul des rendements pondérés du portefeuille
 def calculate_portfolio_returns(stocks, stock_data):
@@ -131,6 +135,30 @@ else:
     state_probs = hmm_model.predict_proba(np.array(test_data['returns']).reshape(-1, 1))
     state_probs = pd.DataFrame(state_probs, index=test_data.index)
 
+    # Télécharger les données des actions jusqu'à aujourd'hui
+    start_date = test_data.index[0]
+    stock_data = get_stock_data(list(stocks.keys()), start=start_date)
+
+    # Calculer les rendements du portefeuille pondéré
+    portfolio_returns = calculate_portfolio_returns(stocks, stock_data)
+
+    # Calcul des betas des actions par rapport au S&P 500
+    betas = calculate_betas(stock_data, gspc_data)
+    st.write("Betas des actions par rapport au S&P 500 :")
+    for stock, beta in betas.items():
+        st.write(f"{stock} : {beta:.2f}")
+
+    # Calcul du beta du portefeuille
+    portfolio_beta = calculate_portfolio_beta(betas, stocks)
+    st.write(f"Beta du portefeuille : {portfolio_beta:.2f}")
+
+    # Stress Testing avec plusieurs scénarios (chute de 10%, 20%, 30%)
+    st.subheader('Stress Testing : Scénarios de Chute du Marché')
+    for stress_level in [-0.1, -0.2, -0.3]:  # Chute de 10%, 20%, 30%
+        stressed_return = stress_test_with_beta(portfolio_beta, stress_level)
+        st.write(f"Scénario de Chute de {int(abs(stress_level * 100))}% du S&P 500 :")
+        st.write(f"Rendement simulé du portefeuille : {stressed_return:.2%}")
+
     # Graphique des régimes de marché détectés
     st.subheader("Régimes de Marché Détectés par le HMM")
     test_data['Regime'] = hidden_states
@@ -156,4 +184,5 @@ else:
     st.write("Probabilités de Régime pour le Dernier Jour:")
     for regime, prob in enumerate(last_day_probs):
         st.write(f"Régime {regime}: {prob:.2%}")
+
 

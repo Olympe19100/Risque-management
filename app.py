@@ -6,7 +6,6 @@ import plotly.express as px
 from hmmlearn.hmm import GaussianHMM
 from PIL import Image
 from sklearn.linear_model import LinearRegression
-from datetime import datetime
 
 # Actions et leurs pondérations
 stocks = {
@@ -23,47 +22,24 @@ st.image(logo, width=200)  # Afficher le logo
 # Personnalisation des couleurs pour correspondre à la charte graphique
 custom_color_palette = ['#D4AF37', '#343a40', '#007bff']
 
-# Fonction pour télécharger les données des actions jusqu'à aujourd'hui
+# Télécharger et préparer les données du S&P 500 (^GSPC)
 @st.cache_data
-def get_stock_data(_tickers, start, end=None):
-    """
-    Télécharger les données des actions pour les tickers donnés depuis la date de début (start)
-    jusqu'à aujourd'hui si aucune date de fin (end) n'est spécifiée.
-    
-    Parameters:
-    _tickers : liste des symboles boursiers
-    start : date de début (format 'YYYY-MM-DD')
-    end : date de fin (par défaut est None, signifie aujourd'hui)
-    
-    Returns:
-    dict : un dictionnaire contenant les données de chaque action avec les rendements quotidiens
-    """
-    if end is None:
-        end = datetime.now().strftime('%Y-%m-%d')  # Utiliser la date d'aujourd'hui si end n'est pas fourni
+def get_market_data():
+    data = yf.download('^GSPC')
+    data['returns'] = np.log(data['Adj Close']) - np.log(data['Adj Close'].shift(1))
+    data.dropna(inplace=True)
+    return data[['Adj Close', 'returns']]
 
+# Fonction pour télécharger les données des actions
+@st.cache_data
+def get_stock_data(_tickers, start, end):
     stock_data = {}
     for ticker in _tickers:
         data = yf.download(ticker, start=start, end=end)
         data['Daily Return'] = data['Adj Close'].pct_change()
         data.dropna(inplace=True)
         stock_data[ticker] = data
-    
     return stock_data
-
-# Fonction pour télécharger les données du S&P 500 jusqu'à aujourd'hui
-@st.cache_data
-def get_market_data():
-    """
-    Télécharger et préparer les données du S&P 500 jusqu'à aujourd'hui.
-    
-    Returns:
-    pandas.DataFrame : dataframe contenant les prix ajustés et les rendements du S&P 500
-    """
-    end = datetime.now().strftime('%Y-%m-%d')  # Date de fin est aujourd'hui
-    data = yf.download('^GSPC', end=end)
-    data['returns'] = np.log(data['Adj Close']) - np.log(data['Adj Close'].shift(1))
-    data.dropna(inplace=True)
-    return data[['Adj Close', 'returns']]
 
 # Calcul des rendements pondérés du portefeuille
 def calculate_portfolio_returns(stocks, stock_data):
@@ -135,9 +111,10 @@ else:
     state_probs = hmm_model.predict_proba(np.array(test_data['returns']).reshape(-1, 1))
     state_probs = pd.DataFrame(state_probs, index=test_data.index)
 
-    # Télécharger les données des actions jusqu'à aujourd'hui
+    # Télécharger les données des actions
     start_date = test_data.index[0]
-    stock_data = get_stock_data(list(stocks.keys()), start=start_date)
+    end_date = test_data.index[-1]
+    stock_data = get_stock_data(list(stocks.keys()), start=start_date, end=end_date)
 
     # Calculer les rendements du portefeuille pondéré
     portfolio_returns = calculate_portfolio_returns(stocks, stock_data)
@@ -184,5 +161,6 @@ else:
     st.write("Probabilités de Régime pour le Dernier Jour:")
     for regime, prob in enumerate(last_day_probs):
         st.write(f"Régime {regime}: {prob:.2%}")
+
 
 

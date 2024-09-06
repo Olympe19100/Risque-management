@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import plotly.express as px
 from hmmlearn.hmm import GaussianHMM
+from sklearn.mixture import GaussianMixture
 from quantstats.stats import sharpe, max_drawdown
 from PIL import Image
 
@@ -59,7 +60,7 @@ def calculate_metrics(portfolio_returns):
 
 # Télécharger les données du S&P 500
 st.title("Olympe Financial Group - Tableau de Bord")
-st.write("Analyse des rendements du portefeuille basé sur un modèle HMM.")
+st.write("Analyse des rendements du portefeuille basé sur des modèles HMM et GMM.")
 
 gspc_data = get_market_data()
 
@@ -92,10 +93,19 @@ else:
     hmm_model.fit(np.array(train_data['returns']).reshape(-1, 1))
     st.write(f"Score du modèle HMM : {hmm_model.score(np.array(train_data['returns']).reshape(-1, 1))}")
 
-    # Prédiction des régimes de marché sur les données de test
-    hidden_states = hmm_model.predict(np.array(test_data['returns']).reshape(-1, 1))
-    state_probs = hmm_model.predict_proba(np.array(test_data['returns']).reshape(-1, 1))
-    state_probs = pd.DataFrame(state_probs, index=test_data.index)
+    # Prédiction des régimes de marché avec HMM sur les données de test
+    hidden_states_hmm = hmm_model.predict(np.array(test_data['returns']).reshape(-1, 1))
+    state_probs_hmm = hmm_model.predict_proba(np.array(test_data['returns']).reshape(-1, 1))
+    state_probs_hmm = pd.DataFrame(state_probs_hmm, index=test_data.index)
+
+    # Entraînement du modèle GMM sur les mêmes données
+    gmm_model = GaussianMixture(n_components=2, covariance_type='full', random_state=42)
+    gmm_model.fit(np.array(train_data['returns']).reshape(-1, 1))
+
+    # Prédiction des régimes de marché avec GMM sur les données de test
+    hidden_states_gmm = gmm_model.predict(np.array(test_data['returns']).reshape(-1, 1))
+    state_probs_gmm = gmm_model.predict_proba(np.array(test_data['returns']).reshape(-1, 1))
+    state_probs_gmm = pd.DataFrame(state_probs_gmm, index=test_data.index)
 
     # Télécharger les données des actions
     start_date = test_data.index[0]
@@ -112,31 +122,49 @@ else:
     st.write(f"Max Drawdown : {max_dd:.2%}")
     st.write(f"Volatilité (Annualisée) : {volatility:.2%}")
 
-    # Graphique des régimes de marché détectés
+    # Graphique des régimes de marché détectés par HMM
     st.subheader("Régimes de Marché Détectés par le HMM")
-    test_data['Regime'] = hidden_states
-    fig_regimes = px.scatter(test_data, x=test_data.index, y='Adj Close', color='Regime', title="Régimes de Marché Détectés", color_discrete_sequence=custom_color_palette)
-    st.plotly_chart(fig_regimes)
+    test_data['Regime HMM'] = hidden_states_hmm
+    fig_hmm_regimes = px.scatter(test_data, x=test_data.index, y='Adj Close', color='Regime HMM', title="Régimes de Marché Détectés par HMM", color_discrete_sequence=custom_color_palette)
+    st.plotly_chart(fig_hmm_regimes)
+
+    # Graphique des régimes de marché détectés par GMM
+    st.subheader("Régimes de Marché Détectés par le GMM")
+    test_data['Regime GMM'] = hidden_states_gmm
+    fig_gmm_regimes = px.scatter(test_data, x=test_data.index, y='Adj Close', color='Regime GMM', title="Régimes de Marché Détectés par GMM", color_discrete_sequence=custom_color_palette)
+    st.plotly_chart(fig_gmm_regimes)
 
     # Graphique en camembert des pondérations du portefeuille
     st.subheader('Pondérations du Portefeuille')
     fig_pie = px.pie(values=list(stocks.values()), names=list(stocks.keys()), title='Pondérations des Sociétés dans le Portefeuille', color_discrete_sequence=custom_color_palette)
     st.plotly_chart(fig_pie)
 
-    # Affichage des probabilités de changement de régime
-    st.subheader("Probabilités de Changement de Régime")
+    # Affichage des probabilités de changement de régime pour HMM
+    st.subheader("Probabilités de Changement de Régime pour HMM")
+    fig_hmm_probs = px.line(state_probs_hmm, title='Probabilités des Régimes de Marché (HMM)',
+                            labels={'value': 'Probabilité', 'index': 'Date'},
+                            color_discrete_sequence=custom_color_palette)
+    st.plotly_chart(fig_hmm_probs)
 
-    # Graphique des probabilités des régimes de marché
-    fig_probs = px.line(state_probs, title='Probabilités des Régimes de Marché',
-                        labels={'value': 'Probabilité', 'index': 'Date'},
-                        color_discrete_sequence=custom_color_palette)
-    st.plotly_chart(fig_probs)
+    # Affichage des probabilités de changement de régime pour GMM
+    st.subheader("Probabilités de Changement de Régime pour GMM")
+    fig_gmm_probs = px.line(state_probs_gmm, title='Probabilités des Régimes de Marché (GMM)',
+                            labels={'value': 'Probabilité', 'index': 'Date'},
+                            color_discrete_sequence=custom_color_palette)
+    st.plotly_chart(fig_gmm_probs)
 
-    # Afficher les probabilités du dernier jour
-    last_day_probs = state_probs.iloc[-1]
-    st.write("Probabilités de Régime pour le Dernier Jour:")
-    for regime, prob in enumerate(last_day_probs):
+    # Afficher les probabilités du dernier jour pour HMM
+    last_day_probs_hmm = state_probs_hmm.iloc[-1]
+    st.write("Probabilités de Régime (HMM) pour le Dernier Jour:")
+    for regime, prob in enumerate(last_day_probs_hmm):
         st.write(f"Régime {regime}: {prob:.2%}")
+
+    # Afficher les probabilités du dernier jour pour GMM
+    last_day_probs_gmm = state_probs_gmm.iloc[-1]
+    st.write("Probabilités de Régime (GMM) pour le Dernier Jour:")
+    for regime, prob in enumerate(last_day_probs_gmm):
+        st.write(f"Régime {regime}: {prob:.2%}")
+
 
 
 

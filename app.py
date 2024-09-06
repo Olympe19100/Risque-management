@@ -8,6 +8,9 @@ from sklearn.mixture import GaussianMixture
 from quantstats.stats import sharpe, max_drawdown
 from PIL import Image
 
+# Désactiver la barre de progression pour éviter l'erreur
+yf.pdr_override()
+
 # Actions et leurs pondérations
 stocks = {
     'AAPL': 0.76, 'MSFT': 12.85, 'GOOG': 1.68, 'AMZN': 1.74, 'META': 5.26,
@@ -16,30 +19,33 @@ stocks = {
     'MRK': 11.09, 'PEP': 4.47, 'JNJ': 1.72, 'TSLA': 5.83, 'AXP': 0.53
 }
 
-# Charger et afficher le logo
-logo = Image.open(r"Olympe Financial group (Logo) (1).png")
-st.image(logo, width=200)
-
 # Personnalisation des couleurs pour correspondre à la charte graphique
 custom_color_palette = ['#D4AF37', '#343a40', '#007bff']
 
 # Télécharger et préparer les données du S&P 500 (^GSPC)
 @st.cache_data
 def get_market_data():
-    data = yf.download('^GSPC')
-    data['returns'] = np.log(data['Adj Close']) - np.log(data['Adj Close'].shift(1))
-    data.dropna(inplace=True)
-    return data[['Adj Close', 'returns']]
+    try:
+        data = yf.download('^GSPC', progress=False)
+        data['returns'] = np.log(data['Adj Close']) - np.log(data['Adj Close'].shift(1))
+        data.dropna(inplace=True)
+        return data[['Adj Close', 'returns']]
+    except Exception as e:
+        st.error(f"Erreur lors du téléchargement des données du marché : {str(e)}")
+        return pd.DataFrame()
 
 # Télécharger les données des actions
 @st.cache_data
 def get_stock_data(_tickers, start, end):
     stock_data = {}
     for ticker in _tickers:
-        data = yf.download(ticker, start=start, end=end)
-        data['Daily Return'] = data['Adj Close'].pct_change()
-        data.dropna(inplace=True)
-        stock_data[ticker] = data
+        try:
+            data = yf.download(ticker, start=start, end=end, progress=False)
+            data['Daily Return'] = data['Adj Close'].pct_change()
+            data.dropna(inplace=True)
+            stock_data[ticker] = data
+        except Exception as e:
+            st.warning(f"Erreur lors du téléchargement des données pour {ticker} : {str(e)}")
     return stock_data
 
 # Calcul des rendements pondérés du portefeuille
@@ -55,33 +61,41 @@ def calculate_portfolio_returns(stocks, stock_data):
 def calculate_metrics(portfolio_returns):
     sharpe_ratio = sharpe(portfolio_returns)
     max_dd = max_drawdown(portfolio_returns)
-    volatility = np.std(portfolio_returns) * np.sqrt(252)  # Annualized volatility
+    volatility = np.std(portfolio_returns) * np.sqrt(252)  # Volatilité annualisée
     return sharpe_ratio, max_dd, volatility
 
-# Télécharger les données du S&P 500
-st.title("Olympe Financial Group - Tableau de Bord")
-st.write("Analyse des rendements du portefeuille basé sur un modèle HMM avec des émissions GMM.")
+def main():
+    # Charger et afficher le logo
+    try:
+        logo = Image.open(r"Olympe Financial group (Logo) (1).png")
+        st.image(logo, width=200)
+    except FileNotFoundError:
+        st.warning("Logo non trouvé. Veuillez vérifier le chemin du fichier.")
 
-gspc_data = get_market_data()
+    st.title("Olympe Financial Group - Tableau de Bord")
+    st.write("Analyse des rendements du portefeuille basé sur un modèle HMM avec des émissions GMM.")
 
-# Affichage du nombre total de lignes
-nombre_lignes = gspc_data.shape[0]
-st.write(f"Nombre total de points de données du S&P 500 téléchargés : {nombre_lignes}")
+    # Télécharger les données du S&P 500
+    gspc_data = get_market_data()
 
-# Demander à l'utilisateur d'entrer son montant d'investissement
-investment = st.number_input("Montant total de l'investissement (€)", min_value=0.0, value=10000.0)
+    if gspc_data.empty:
+        st.error("Impossible de récupérer les données du S&P 500. Veuillez vérifier votre connexion internet et réessayer.")
+        return
 
-# Calculer l'allocation sur chaque action en fonction du montant d'investissement
-if investment > 0:
-    st.subheader('Allocation du portefeuille')
-    for stock, weight in stocks.items():
-        allocation = (weight / 100) * investment
-        st.write(f"{stock} : {allocation:.2f} €")
+    # Affichage du nombre total de lignes
+    nombre_lignes = gspc_data.shape[0]
+    st.write(f"Nombre total de points de données du S&P 500 téléchargés : {nombre_lignes}")
 
-# Vérifier que les données ne sont pas vides
-if gspc_data.empty:
-    st.error("Les données du S&P 500 sont vides.")
-else:
+    # Demander à l'utilisateur d'entrer son montant d'investissement
+    investment = st.number_input("Montant total de l'investissement (€)", min_value=0.0, value=10000.0)
+
+    # Calculer l'allocation sur chaque action en fonction du montant d'investissement
+    if investment > 0:
+        st.subheader('Allocation du portefeuille')
+        for stock, weight in stocks.items():
+            allocation = (weight / 100) * investment
+            st.write(f"{stock} : {allocation:.2f} €")
+
     # Diviser les données en entraînement (22 000 points) et test
     train_window = 22000  # Taille de la fenêtre d'entraînement
     train_data = gspc_data.iloc[:train_window]
@@ -118,12 +132,16 @@ else:
     # Graphique des régimes de marché détectés par HMM-GMM
     st.subheader("Régimes de Marché Détectés par le HMM avec GMM")
     test_data['Regime GMM'] = hidden_states_gmm
-    fig_gmm_regimes = px.scatter(test_data, x=test_data.index, y='Adj Close', color='Regime GMM', title="Régimes de Marché Détectés par HMM-GMM", color_discrete_sequence=custom_color_palette)
+    fig_gmm_regimes = px.scatter(test_data, x=test_data.index, y='Adj Close', color='Regime GMM', 
+                                 title="Régimes de Marché Détectés par HMM-GMM", 
+                                 color_discrete_sequence=custom_color_palette)
     st.plotly_chart(fig_gmm_regimes)
 
     # Graphique en camembert des pondérations du portefeuille
     st.subheader('Pondérations du Portefeuille')
-    fig_pie = px.pie(values=list(stocks.values()), names=list(stocks.keys()), title='Pondérations des Sociétés dans le Portefeuille', color_discrete_sequence=custom_color_palette)
+    fig_pie = px.pie(values=list(stocks.values()), names=list(stocks.keys()), 
+                     title='Pondérations des Sociétés dans le Portefeuille', 
+                     color_discrete_sequence=custom_color_palette)
     st.plotly_chart(fig_pie)
 
     # Affichage des probabilités de changement de régime pour HMM-GMM
@@ -138,5 +156,9 @@ else:
     st.write("Probabilités de Régime (HMM-GMM) pour le Dernier Jour:")
     for regime, prob in enumerate(last_day_gmm_probs):
         st.write(f"Régime {regime}: {prob:.2%}")
+
+if __name__ == "__main__":
+    st.set_page_config(page_title="Olympe Financial Group Dashboard", page_icon=":chart_with_upwards_trend:", layout="wide")
+    main()
 
 

@@ -50,13 +50,6 @@ def calculate_portfolio_returns(stocks, stock_data):
     portfolio_returns['Portfolio'] = portfolio_returns.sum(axis=1)
     return portfolio_returns['Portfolio']
 
-# Calcul des métriques pour le portefeuille
-def calculate_metrics(returns):
-    sharpe_ratio = sharpe(returns)
-    max_dd = max_drawdown(returns)
-    volatility = returns.std() * np.sqrt(252)  # Annualisée
-    return sharpe_ratio, max_dd, volatility
-
 # Télécharger les données du S&P 500
 st.title("Olympe Financial Group - Tableau de Bord")
 st.write("Analyse des rendements du portefeuille basé sur un modèle HMM.")

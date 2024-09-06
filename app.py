@@ -6,6 +6,7 @@ import plotly.express as px
 from hmmlearn.hmm import GaussianHMM
 from PIL import Image
 from sklearn.linear_model import LinearRegression
+from datetime import datetime
 
 # Actions et leurs pondérations
 stocks = {
@@ -24,11 +25,30 @@ custom_color_palette = ['#D4AF37', '#343a40', '#007bff']
 
 # Télécharger et préparer les données du S&P 500 (^GSPC)
 @st.cache_data
-def get_market_data():
-    data = yf.download('^GSPC')
-    data['returns'] = np.log(data['Adj Close']) - np.log(data['Adj Close'].shift(1))
-    data.dropna(inplace=True)
-    return data[['Adj Close', 'returns']]
+def get_stock_data(_tickers, start, end=None):
+    """
+    Télécharger les données des actions pour les tickers donnés depuis la date de début (start)
+    jusqu'à aujourd'hui si aucune date de fin (end) n'est spécifiée.
+    
+    Parameters:
+    _tickers : liste des symboles boursiers
+    start : date de début (format 'YYYY-MM-DD')
+    end : date de fin (par défaut est None, signifie aujourd'hui)
+    
+    Returns:
+    dict : un dictionnaire contenant les données de chaque action avec les rendements quotidiens
+    """
+    if end is None:
+        end = datetime.today().strftime('%Y-%m-%d')  # Utiliser la date d'aujourd'hui si end n'est pas fourni
+
+    stock_data = {}
+    for ticker in _tickers:
+        data = yf.download(ticker, start=start, end=end)
+        data['Daily Return'] = data['Adj Close'].pct_change()
+        data.dropna(inplace=True)
+        stock_data[ticker] = data
+    
+    return stock_data
 
 # Fonction pour télécharger les données des actions
 @st.cache_data

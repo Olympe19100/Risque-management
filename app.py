@@ -83,7 +83,7 @@ def apply_long_cash_strategy(returns, state_probs, cash_threshold, leverage):
     # state_probs.iloc[:, 0] est la probabilité de l'état haussier
     market_regime = np.where(state_probs.iloc[:, 0] > cash_threshold, 0, 1)  # 0 pour Long, 1 pour Cash
     
-    strategy_returns = np.where(market_regime == 0, returns * leverage, 0)  # Long ou Cash
+    strategy_returns = np.where(market_regime == 0, returns * leverage, 0)  # Long quand haussier, sinon Cash
     
     return pd.Series(strategy_returns, index=common_index)
 
@@ -143,7 +143,7 @@ else:
     if current_state_prob > cash_threshold:
         st.info("Régime actuel : Bullish (Haussier). Recommandation : Position Long.")
     else:
-        st.info("Régime actuel : Incertain ou Baissier. Recommandation : Position Cash.")
+        st.warning("Régime actuel : Bearish (Baissier). Recommandation : Rester en Cash.")
 
     # Télécharger les données des actions
     start_date = test_data.index[0]

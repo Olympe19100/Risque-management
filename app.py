@@ -11,7 +11,7 @@ from PIL import Image
 cash_threshold = 0.0156  # Seuil pour entrer en position "long" dans HMM
 cvar_threshold = 0.0238  # Seuil de CVaR pour passer en "cash"
 leverage = 1  # Levier à appliquer
-train_window = 10000  # Taille de la fenêtre d'entraînement (22 000 points de données)
+train_window = 4000  # Taille de la fenêtre d'entraînement (22 000 points de données)
 
 # Actions et leurs pondérations
 stocks = {

@@ -42,7 +42,7 @@ def calculate_portfolio_returns(stocks, stock_data):
     return portfolio_returns['Portfolio']
 
 # Télécharger les données du S&P 500
-st.title("Analyse des Régimes de Marché avec HMM")
+st.title("Analyse des Régimes de Marché avec HMM (2 états)")
 gspc_data = get_market_data()
 
 # Vérifier que les données ne sont pas vides
@@ -56,7 +56,7 @@ else:
 
     # Entraînement du modèle HMM avec des émissions gaussiennes
     np.random.seed(42)
-    n_components = 3  # Nombre de régimes de marché
+    n_components = 2  # Nombre de régimes de marché (modifié à 2)
     hmm_model = hmm.GaussianHMM(n_components=n_components, covariance_type="full", n_iter=1000)
     hmm_model.fit(np.array(train_data['returns']).reshape(-1, 1))
     
@@ -70,12 +70,12 @@ else:
     # Afficher les régimes détectés
     test_data['Regime'] = hidden_states
     fig_regimes = px.scatter(test_data, x=test_data.index, y='Adj Close', color='Regime',
-                             title="Régimes de Marché Détectés par HMM")
+                             title="Régimes de Marché Détectés par HMM (2 états)")
     st.plotly_chart(fig_regimes)
 
     # Affichage des probabilités de changement de régime
-    st.subheader("Probabilités de Changement de Régime - HMM")
-    fig_probs = px.line(state_probs, title='Probabilités des Régimes de Marché (HMM)',
+    st.subheader("Probabilités de Changement de Régime - HMM (2 états)")
+    fig_probs = px.line(state_probs, title='Probabilités des Régimes de Marché (HMM - 2 états)',
                         labels={'value': 'Probabilité', 'index': 'Date'})
     st.plotly_chart(fig_probs)
 
@@ -88,10 +88,8 @@ else:
     # Utiliser ces probabilités pour de la gestion de portefeuille ou des alertes
     if last_day_probs.idxmax() == 0:
         st.warning("Le marché semble être dans un régime baissier.")
-    elif last_day_probs.idxmax() == 1:
-        st.success("Le marché est dans un régime haussier.")
     else:
-        st.info("Le marché est dans un régime incertain.")
+        st.success("Le marché est dans un régime haussier.")
 
 
 

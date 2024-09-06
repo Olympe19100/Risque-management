@@ -4,15 +4,17 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from hmmlearn.hmm import GaussianHMM
+import datetime
 
 # Titre de l'application
 st.title("Gestion de Portefeuille Basée sur les Régimes de Marché (HMM)")
 
 # Télécharger les données du S&P 500 (SPY)
-start_date = "2019-01-24"
-end_date = "2024-04-16"
+start_date = "1951-01-01"
+end_date = datetime.date.today().strftime("%Y-%m-%d")  # Date d'aujourd'hui
+
 st.write("Téléchargement des données du S&P 500 (SPY)...")
-spy_data = yf.download('SPY', start=start_date, end=end_date)
+spy_data = yf.download('^GSPC', start=start_date, end=end_date)
 
 # Calculer les rendements journaliers du S&P 500
 spy_data['Daily Return'] = spy_data['Adj Close'].pct_change().dropna()
@@ -70,7 +72,7 @@ portfolio_returns['Active Cumulative Return'] = (1 + portfolio_returns['Active R
 
 # Afficher la performance cumulée
 cumulative_performance = portfolio_returns['Active Cumulative Return'].iloc[-1]
-st.subheader(f"La performance cumulée du portefeuille avec gestion des régimes sur 5 ans est de {cumulative_performance:.2%}")
+st.subheader(f"La performance cumulée du portefeuille avec gestion des régimes est de {cumulative_performance:.2%}")
 
 # Tracer les rendements cumulés du portefeuille avec et sans la stratégie de régimes
 st.subheader("Graphique des Rendements Cumulés")
@@ -89,7 +91,3 @@ ax.scatter(spy_data.index, spy_data['Adj Close'], c=spy_data['Market Regime'], c
 ax.set_title("Régimes de Marché Détectés")
 ax.legend()
 st.pyplot(fig)
-
-
-
-

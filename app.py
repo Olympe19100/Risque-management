@@ -5,8 +5,7 @@ import pandas as pd
 from hmmlearn.hmm import GaussianHMM
 import seaborn as sns
 import matplotlib.pyplot as plt
-import vectorbt as vbt
-import quantstats as qs
+
 import warnings
 
 warnings.filterwarnings("ignore", category=UserWarning, module="matplotlib")
@@ -54,34 +53,6 @@ sns.scatterplot(x=test_data.index, y='Adj Close', hue='market_regime', data=test
 plt.title('Régimes de marché')
 st.pyplot(plt)
 
-# Définir les entrées et sorties de marché pour le portefeuille
-prices = test_data['Adj Close']
-hmm_entries_long = (test_data['market_regime'] == 0)
-hmm_exits_long = (test_data['market_regime'] == 1)
 
-hmm_portfolio = vbt.Portfolio.from_signals(prices, entries=hmm_entries_long, exits=hmm_exits_long)
-hmm_returns = hmm_portfolio.returns()
-
-# Comparer aux rendements du benchmark
-benchmark_returns = prices.pct_change().dropna()
-
-# Performance du portefeuille
-st.subheader("Performance du portefeuille avec HMM")
-st.write(f"Performance cumulée du portefeuille sur les 5 dernières années : {hmm_returns.cumsum()[-1]:.2%}")
-
-# Distribution des rendements
-extreme_market = test_data[test_data['market_regime'] == 1]
-normal_market = test_data[test_data['market_regime'] == 0]
-
-plt.figure(figsize=(12, 6))
-sns.histplot(extreme_market['returns'], color='red', bins=30, kde=True, element='step', label='Marchés Extrêmes')
-sns.histplot(normal_market['returns'], color='blue', bins=30, kde=True, element='step', label='Marchés Normaux')
-plt.axvline(extreme_market['returns'].mean(), color='k', linestyle='dashed', linewidth=1)
-plt.axvline(normal_market['returns'].mean(), color='k', linestyle='dashed', linewidth=1)
-plt.title('Distribution des Rendements')
-plt.xlabel('Rendements')
-plt.ylabel('Fréquence')
-plt.legend()
-st.pyplot(plt)
 
 

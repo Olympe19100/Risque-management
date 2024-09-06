@@ -8,9 +8,6 @@ from sklearn.mixture import GaussianMixture
 from quantstats.stats import sharpe, max_drawdown
 from PIL import Image
 
-# Désactiver la barre de progression pour éviter l'erreur
-yf.pdr_override()
-
 # Actions et leurs pondérations
 stocks = {
     'AAPL': 0.76, 'MSFT': 12.85, 'GOOG': 1.68, 'AMZN': 1.74, 'META': 5.26,
@@ -65,6 +62,8 @@ def calculate_metrics(portfolio_returns):
     return sharpe_ratio, max_dd, volatility
 
 def main():
+    st.set_page_config(page_title="Olympe Financial Group Dashboard", page_icon=":chart_with_upwards_trend:", layout="wide")
+    
     # Charger et afficher le logo
     try:
         logo = Image.open(r"Olympe Financial group (Logo) (1).png")
@@ -97,7 +96,7 @@ def main():
             st.write(f"{stock} : {allocation:.2f} €")
 
     # Diviser les données en entraînement (22 000 points) et test
-    train_window = 22000  # Taille de la fenêtre d'entraînement
+    train_window = min(22000, len(gspc_data) - 1)  # Assurez-vous que train_window n'est pas plus grand que les données disponibles
     train_data = gspc_data.iloc[:train_window]
     test_data = gspc_data.iloc[train_window:]
 
@@ -158,7 +157,6 @@ def main():
         st.write(f"Régime {regime}: {prob:.2%}")
 
 if __name__ == "__main__":
-    st.set_page_config(page_title="Olympe Financial Group Dashboard", page_icon=":chart_with_upwards_trend:", layout="wide")
     main()
 
 

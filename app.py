@@ -4,7 +4,6 @@ import numpy as np
 import pandas as pd
 import plotly.express as px
 from hmmlearn.hmm import GaussianHMM
-from quantstats.stats import sharpe, max_drawdown
 from PIL import Image
 
 # Actions et leurs pondérations
@@ -50,9 +49,18 @@ def calculate_portfolio_returns(stocks, stock_data):
     portfolio_returns['Portfolio'] = portfolio_returns.sum(axis=1)
     return portfolio_returns['Portfolio']
 
+# Calcul du stress test
+def stress_test(stock_data, stress_level, correlation_matrix):
+    stressed_stock_data = stock_data.copy()
+    for ticker in stressed_stock_data.keys():
+        # Appliquer une chute pondérée en fonction des corrélations
+        correlation_factor = correlation_matrix[ticker].mean()  # Utiliser la corrélation moyenne
+        stressed_stock_data[ticker]['Adj Close'] *= (1 + stress_level * correlation_factor)
+    return stressed_stock_data
+
 # Télécharger les données du S&P 500
 st.title("Olympe Financial Group - Tableau de Bord")
-st.write("Analyse des rendements du portefeuille basé sur un modèle HMM.")
+st.write("Analyse des rendements du portefeuille basé sur un modèle HMM avec Stress Test.")
 
 gspc_data = get_market_data()
 
@@ -98,12 +106,18 @@ else:
     # Calculer les rendements du portefeuille pondéré
     portfolio_returns = calculate_portfolio_returns(stocks, stock_data)
 
-    # Calcul des métriques du portefeuille
-    sharpe_ratio, max_dd, volatility = calculate_metrics(portfolio_returns)
-    st.subheader('Métriques du Portefeuille')
-    st.write(f"Sharpe Ratio : {sharpe_ratio:.2f}")
-    st.write(f"Max Drawdown : {max_dd:.2%}")
-    st.write(f"Volatilité (Annualisée) : {volatility:.2%}")
+    # Calcul de la matrice de corrélation
+    stock_returns = pd.DataFrame({ticker: stock_data[ticker]['Daily Return'] for ticker in stocks.keys()})
+    correlation_matrix = stock_returns.corr()
+
+    # Stress Testing avec plusieurs scénarios
+    st.subheader('Stress Testing : Scénarios de Chute du Marché')
+
+    for stress_level in [-0.1, -0.2, -0.3]:  # Chute de 10%, 20%, 30%
+        stressed_stock_data = stress_test(stock_data, stress_level, correlation_matrix)
+        stressed_portfolio_returns = calculate_portfolio_returns(stocks, stressed_stock_data)
+        st.write(f"Scénario de Chute de {int(abs(stress_level * 100))}% :")
+        st.write(f"Rendement simulé du portefeuille : {stressed_portfolio_returns.mean():.2%}")
 
     # Graphique des régimes de marché détectés
     st.subheader("Régimes de Marché Détectés par le HMM")
@@ -130,5 +144,3 @@ else:
     st.write("Probabilités de Régime pour le Dernier Jour:")
     for regime, prob in enumerate(last_day_probs):
         st.write(f"Régime {regime}: {prob:.2%}")
-
-

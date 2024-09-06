@@ -138,3 +138,4 @@ else:
     st.write("Probabilités de Régime (HMM-GMM) pour le Dernier Jour:")
     for regime, prob in enumerate(last_day_gmm_probs):
         st.write(f"Régime {regime}: {prob:.2%}")
+

@@ -83,7 +83,8 @@ def apply_long_cash_strategy(returns, state_probs, cash_threshold, leverage):
     # state_probs.iloc[:, 0] est la probabilité de l'état haussier
     market_regime = np.where(state_probs.iloc[:, 0] > cash_threshold, 0, 1)  # 0 pour Long, 1 pour Cash
     
-    strategy_returns = np.where(market_regime == 0, returns * leverage, 0)  # Long quand haussier, sinon Cash
+    # Quand on est en état baissier (Cash), les rendements sont nuls
+    strategy_returns = np.where(market_regime == 0, returns * leverage, 0)
     
     return pd.Series(strategy_returns, index=common_index)
 
@@ -196,3 +197,4 @@ else:
     st.subheader('Pondérations du Portefeuille')
     fig_pie = px.pie(values=list(stocks.values()), names=list(stocks.keys()), title='Pondérations des Sociétés dans le Portefeuille', color_discrete_sequence=custom_color_palette)
     st.plotly_chart(fig_pie)
+

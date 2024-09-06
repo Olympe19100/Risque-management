@@ -111,31 +111,6 @@ else:
     state_probs = hmm_model.predict_proba(np.array(test_data['returns']).reshape(-1, 1))
     state_probs = pd.DataFrame(state_probs, index=test_data.index)
 
-    # Télécharger les données des actions
-    start_date = test_data.index[0]
-    end_date = test_data.index[-1]
-    stock_data = get_stock_data(list(stocks.keys()), start=start_date, end=end_date)
-
-    # Calculer les rendements du portefeuille pondéré
-    portfolio_returns = calculate_portfolio_returns(stocks, stock_data)
-
-    # Calcul des betas des actions par rapport au S&P 500
-    betas = calculate_betas(stock_data, gspc_data)
-    st.write("Betas des actions par rapport au S&P 500 :")
-    for stock, beta in betas.items():
-        st.write(f"{stock} : {beta:.2f}")
-
-    # Calcul du beta du portefeuille
-    portfolio_beta = calculate_portfolio_beta(betas, stocks)
-    st.write(f"Beta du portefeuille : {portfolio_beta:.2f}")
-
-    # Stress Testing avec plusieurs scénarios (chute de 10%, 20%, 30%)
-    st.subheader('Stress Testing : Scénarios de Chute du Marché')
-    for stress_level in [-0.1, -0.2, -0.3]:  # Chute de 10%, 20%, 30%
-        stressed_return = stress_test_with_beta(portfolio_beta, stress_level)
-        st.write(f"Scénario de Chute de {int(abs(stress_level * 100))}% du S&P 500 :")
-        st.write(f"Rendement simulé du portefeuille : {stressed_return:.2%}")
-
     # Graphique des régimes de marché détectés
     st.subheader("Régimes de Marché Détectés par le HMM")
     test_data['Regime'] = hidden_states

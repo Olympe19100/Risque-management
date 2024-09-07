@@ -2,7 +2,7 @@ import streamlit as st
 import yfinance as yf
 import numpy as np
 import pandas as pd
-import plotly.express as px
+import matplotlib.pyplot as plt
 from hmmlearn import hmm
 from sklearn.mixture import GaussianMixture
 from quantstats.stats import sharpe, max_drawdown
@@ -116,21 +116,31 @@ else:
 
     # Graphique des régimes de marché détectés par HMM-GMM
     st.subheader("Régimes de Marché Détectés par le HMM avec GMM")
-    test_data['Regime GMM'] = hidden_states_gmm
-    fig_gmm_regimes = px.scatter(test_data, x=test_data.index, y='Adj Close', color='Regime GMM', title="Régimes de Marché Détectés par HMM-GMM", color_discrete_sequence=custom_color_palette)
-    st.plotly_chart(fig_gmm_regimes)
+    fig, ax = plt.subplots(figsize=(12, 6))
+    scatter = ax.scatter(test_data.index, test_data['Adj Close'], c=hidden_states_gmm, cmap='viridis', alpha=0.6)
+    ax.set_title("Régimes de Marché Détectés par HMM-GMM")
+    ax.set_xlabel("Date")
+    ax.set_ylabel("Prix Ajusté")
+    plt.colorbar(scatter, label='Régime')
+    plt.xticks(rotation=45)
+    st.pyplot(fig)
 
     # Graphique en camembert des pondérations du portefeuille
     st.subheader('Pondérations du Portefeuille')
-    fig_pie = px.pie(values=list(stocks.values()), names=list(stocks.keys()), title='Pondérations des Sociétés dans le Portefeuille', color_discrete_sequence=custom_color_palette)
-    st.plotly_chart(fig_pie)
+    fig, ax = plt.subplots(figsize=(10, 10))
+    ax.pie(list(stocks.values()), labels=list(stocks.keys()), autopct='%1.1f%%', startangle=90, colors=custom_color_palette)
+    ax.set_title('Pondérations des Sociétés dans le Portefeuille')
+    st.pyplot(fig)
 
     # Affichage des probabilités de changement de régime pour HMM-GMM
     st.subheader("Probabilités de Changement de Régime - HMM avec GMM")
-    fig_gmm_probs = px.line(state_probs_gmm, title='Probabilités des Régimes de Marché (HMM-GMM)',
-                            labels={'value': 'Probabilité', 'index': 'Date'},
-                            color_discrete_sequence=custom_color_palette)
-    st.plotly_chart(fig_gmm_probs)
+    fig, ax = plt.subplots(figsize=(12, 6))
+    state_probs_gmm.plot(ax=ax)
+    ax.set_title('Probabilités des Régimes de Marché (HMM-GMM)')
+    ax.set_xlabel('Date')
+    ax.set_ylabel('Probabilité')
+    plt.legend(title='Régime')
+    st.pyplot(fig)
 
     # Afficher les probabilités du dernier jour pour HMM-GMM
     last_day_gmm_probs = state_probs_gmm.iloc[-1]

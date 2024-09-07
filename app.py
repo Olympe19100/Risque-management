@@ -24,7 +24,6 @@ st.image(logo, width=200)
 custom_color_palette = ['#D4AF37', '#343a40', '#007bff']
 
 # Télécharger et préparer les données du S&P 500 (^GSPC)
-@st.cache_data
 def get_market_data():
     data = yf.download('^GSPC')
     data['returns'] = np.log(data['Adj Close']) - np.log(data['Adj Close'].shift(1))
@@ -138,6 +137,7 @@ else:
     st.write("Probabilités de Régime (HMM-GMM) pour le Dernier Jour:")
     for regime, prob in enumerate(last_day_gmm_probs):
         st.write(f"Régime {regime}: {prob:.2%}")
+
 
 
 

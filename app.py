@@ -35,7 +35,8 @@ score_model = hmm_model.score(np.array(train_data['returns']).reshape(-1, 1))
 st.write(f"Score du modèle : {score_model}")
 
 # Prédire les régimes de marché
-test_data['market_regime'] = hmm_model.predict(np.array(test_data['returns']))
+# Assurez-vous que les données sont en 2D avant de passer à hmm_model.predict()
+test_data['market_regime'] = hmm_model.predict(np.array(test_data['returns']).reshape(-1, 1))
 
 # Afficher la matrice de transition
 transition_matrix = hmm_model.transmat_
@@ -72,6 +73,7 @@ st.pyplot(plt)
 # Afficher les dernières données de régime de marché
 st.write("Dernières données de régime de marché:")
 st.write(test_data.tail(1))
+
 
 
 

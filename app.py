@@ -4,12 +4,9 @@ import numpy as np
 import pandas as pd
 import plotly.express as px
 from hmmlearn.hmm import GaussianHMM
-from quantstats.stats import sharpe, max_drawdown
-from PIL import Image
 
 # Seuils pour la stratégie
 cash_threshold = 0.0145  # Seuil pour entrer en position "cash" dans HMM
-cvar_threshold = 0.0569  # Seuil de CVaR pour sortir du marché
 leverage = 2  # Levier à appliquer
 train_window = 22000  # Taille de la fenêtre d'entraînement (22 000 points de données)
 
@@ -20,10 +17,6 @@ stocks = {
     'UNH': 28.24, 'BLK': 0.01, 'HD': 2.15, 'T': 0.63, 'PFE': 0.21,
     'MRK': 11.09, 'PEP': 4.47, 'JNJ': 1.72, 'TSLA': 5.83, 'AXP': 0.53
 }
-
-# Charger et afficher le logo
-logo = Image.open(r"Olympe Financial group (Logo) (1).png")
-st.image(logo, width=200)  # Afficher le logo
 
 # Personnalisation des couleurs pour correspondre à la charte graphique
 custom_color_palette = ['#D4AF37', '#343a40', '#007bff']
@@ -54,29 +47,7 @@ def calculate_portfolio_returns(stocks, stock_data):
     portfolio_returns['Portfolio'] = portfolio_returns.sum(axis=1)
     return portfolio_returns['Portfolio']
 
-# Calcul des métriques pour le portefeuille
-def calculate_metrics(returns):
-    sharpe_ratio = sharpe(returns)
-    max_dd = max_drawdown(returns)
-    volatility = returns.std() * np.sqrt(252)  # Annualisée
-    return sharpe_ratio, max_dd, volatility
-
-# Fonction pour calculer la CVaR
-def calculate_cvar(returns, confidence_level=0.95, window=252):
-    sorted_returns = np.sort(returns)
-    index = int((1 - confidence_level) * len(sorted_returns))
-    cvar = -sorted_returns[:index].mean()  # Moyenne des pires pertes
-    return cvar
-
-# Fonction pour appliquer la gestion des risques basée sur CVaR
-def apply_cvar_risk_management(returns, cvar_threshold, window=252):
-    cvar_series = returns.rolling(window=window).apply(lambda x: calculate_cvar(x, window=window), raw=False)
-    risk_management_exit = cvar_series > cvar_threshold  # Si CVaR dépasse le seuil, on sort du marché
-    managed_returns = returns.copy()
-    managed_returns[risk_management_exit] = 0  # Appliquer la gestion en remplaçant les rendements par 0
-    return managed_returns
-
-# Fonction pour appliquer la stratégie Long/Short/Cash
+# Appliquer la stratégie Long/Short/Cash avec HMM
 def apply_long_short_cash_strategy(returns, state_probs, cash_threshold, leverage):
     # Assurons-nous que returns et state_probs ont le même index
     common_index = returns.index.intersection(state_probs.index)
@@ -100,7 +71,7 @@ def apply_long_short_cash_strategy(returns, state_probs, cash_threshold, leverag
 
 # Télécharger les données du S&P 500
 st.title("Olympe Financial Group - Tableau de Bord")
-st.write("Analyse des rendements du portefeuille basé sur un modèle HMM et gestion des risques via la CVaR.")
+st.write("Analyse des rendements du portefeuille basé sur un modèle HMM.")
 
 gspc_data = get_market_data()
 
@@ -162,56 +133,16 @@ else:
     # Appliquer la stratégie Long/Short/Cash
     strategy_returns = apply_long_short_cash_strategy(portfolio_returns, state_probs, cash_threshold, leverage)
 
-    # Application de la gestion des risques basée sur la CVaR
-    managed_returns = apply_cvar_risk_management(strategy_returns, cvar_threshold)
-
-    # Calcul des métriques du portefeuille géré
-    sharpe_ratio, max_drawdown, volatility = calculate_metrics(managed_returns)
-    st.subheader('Métriques du Portefeuille Géré')
-    st.write(f"Sharpe Ratio : {sharpe_ratio:.2f}")
-    st.write(f"Max Drawdown : {max_drawdown:.2%}")
-    st.write(f"Volatilité (Annualisée) : {volatility:.2%}")
-
-    # Calcul de la CVaR sur les rendements du portefeuille géré
-    cvar = calculate_cvar(managed_returns)
-    st.subheader('Analyse de la CVaR du Portefeuille Géré')
-    st.write(f"CVaR actuel : {cvar:.2%}")
-    st.write(f"Seuil de CVaR : {cvar_threshold:.2%}")
-
-    # Recommandation basée sur la CVaR
-    if cvar > cvar_threshold:
-        st.error(f"CVaR dépasse le seuil de {cvar_threshold:.2%}. Recommandation : Surveiller de près les positions.")
-    else:
-        st.success(f"CVaR sous contrôle ({cvar:.2%}).")
-
-    # Graphique des rendements gérés avec stratégie Long/Short/Cash et CVaR
-    cumulative_managed_returns = (1 + managed_returns).cumprod()
-    st.subheader('Rendements Cumulés du Portefeuille avec Stratégie Long/Short/Cash et Gestion des Risques')
-    fig_cvar = px.line(cumulative_managed_returns, title='Rendements Cumulés (Stratégie Long/Short/Cash avec Gestion des Risques)', color_discrete_sequence=custom_color_palette)
-    st.plotly_chart(fig_cvar)
+    # Graphique des probabilités de régimes
+    st.subheader("Graphique des Probabilités des Régimes de Marché")
+    fig_probs = px.line(state_probs, labels={'index': 'Date', 'value': 'Probabilité'}, 
+                        title='Probabilités de Régimes (Haussier vs Baissier)', 
+                        color_discrete_sequence=custom_color_palette)
+    st.plotly_chart(fig_probs)
 
     # Graphique des régimes de marché détectés
     st.subheader("Régimes de Marché Détectés par le HMM")
     test_data['Regime'] = hidden_states
-    fig_regimes = px.scatter(test_data, x=test_data.index, y='Adj Close', color='Regime', title="Régimes de Marché Détectés", color_discrete_sequence=custom_color_palette)
+    fig_regimes = px.scatter(test_data, x=test_data.index, y='Adj Close', color='Regime', 
+                             title="Régimes de Marché Détectés", color_discrete_sequence=custom_color_palette)
     st.plotly_chart(fig_regimes)
-
-    # Graphique en camembert des pondérations du portefeuille
-    st.subheader('Pondérations du Portefeuille')
-    fig_pie = px.pie(values=list(stocks.values()), names=list(stocks.keys()), title='Pondérations des Sociétés dans le Portefeuille', color_discrete_sequence=custom_color_palette)
-    st.plotly_chart(fig_pie)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

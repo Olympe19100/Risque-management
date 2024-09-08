@@ -4,8 +4,5 @@ numpy
 pandas
 plotly
 hmmlearn
-scikit-learn
-quantstats
 Pillow
-ipython
 

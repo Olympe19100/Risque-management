@@ -25,7 +25,7 @@ st.title("Analyse du Marché avec Modèle de Markov Caché")
 data = get_market_data()
 st.write(f"Nombre total de lignes : {data.shape[0]}")
 
-train_window = 24000
+train_window = 20000
 train_data = data.iloc[:train_window]
 test_data = data.iloc[train_window:]
 

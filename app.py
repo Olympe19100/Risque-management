@@ -5,10 +5,8 @@ import pandas as pd
 import plotly.express as px
 from hmmlearn.hmm import GaussianHMM
 
-# Seuils pour la stratégie
-cash_threshold = 0.0145  # Seuil pour entrer en position "cash" dans HMM
-leverage = 2  # Levier à appliquer
-train_window = 22000  # Taille de la fenêtre d'entraînement (22 000 points de données)
+# Taille de la fenêtre d'entraînement (22 000 points de données)
+train_window = 22000
 
 # Actions et leurs pondérations
 stocks = {
@@ -23,7 +21,7 @@ custom_color_palette = ['#D4AF37', '#343a40', '#007bff']
 
 # Télécharger et préparer les données du S&P 500 (^GSPC)
 def get_market_data():
-    data = yf.download('^GSPC')
+    data = yf.download('^GSPC', progress=False)  # Désactiver la barre de progression
     data['returns'] = np.log(data['Adj Close']) - np.log(data['Adj Close'].shift(1))
     data.dropna(inplace=True)
     return data[['Adj Close', 'returns']]
@@ -32,7 +30,7 @@ def get_market_data():
 def get_stock_data(_tickers, start, end):
     stock_data = {}
     for ticker in _tickers:
-        data = yf.download(ticker, start=start, end=end)
+        data = yf.download(ticker, start=start, end=end, progress=False)  # Désactiver la barre de progression
         data['Daily Return'] = data['Adj Close'].pct_change()
         data.dropna(inplace=True)
         stock_data[ticker] = data
@@ -46,28 +44,6 @@ def calculate_portfolio_returns(stocks, stock_data):
         portfolio_returns[stock] = stock_returns * (weight / 100)
     portfolio_returns['Portfolio'] = portfolio_returns.sum(axis=1)
     return portfolio_returns['Portfolio']
-
-# Appliquer la stratégie Long/Short/Cash avec HMM
-def apply_long_short_cash_strategy(returns, state_probs, cash_threshold, leverage):
-    # Assurons-nous que returns et state_probs ont le même index
-    common_index = returns.index.intersection(state_probs.index)
-    returns = returns.loc[common_index]
-    state_probs = state_probs.loc[common_index]
-    
-    # state_probs.iloc[:, 0] est la probabilité de l'état haussier
-    market_regime = np.where(
-        state_probs.iloc[:, 0] > (1 - cash_threshold), 0,  # Long (très probablement haussier)
-        np.where(state_probs.iloc[:, 0] < cash_threshold, 1,  # Short (très probablement baissier)
-                 2)  # Cash (incertain)
-    )
-    
-    strategy_returns = np.where(
-        market_regime == 0, returns * leverage,  # Long
-        np.where(market_regime == 1, -returns * leverage,  # Short
-                 0)  # Cash
-    )
-    
-    return pd.Series(strategy_returns, index=common_index)
 
 # Télécharger les données du S&P 500
 st.title("Olympe Financial Group - Tableau de Bord")
@@ -114,13 +90,6 @@ else:
     st.subheader('Probabilités de Transition Actuelles')
     st.write(f"Probabilité état haussier (Long) : {current_probs[0]:.2%}")
     st.write(f"Probabilité état baissier (Short) : {current_probs[1]:.2%}")
-    
-    if current_state_prob > (1 - cash_threshold):
-        st.info("Régime actuel : Bullish (Haussier). Recommandation : Position Long.")
-    elif current_state_prob < cash_threshold:
-        st.warning("Régime actuel : Bearish (Baissier). Recommandation : Position Short.")
-    else:
-        st.info("Régime actuel : Incertain. Recommandation : Position Cash.")
 
     # Télécharger les données des actions
     start_date = test_data.index[0]
@@ -129,9 +98,6 @@ else:
 
     # Calculer les rendements du portefeuille pondéré
     portfolio_returns = calculate_portfolio_returns(stocks, stock_data)
-
-    # Appliquer la stratégie Long/Short/Cash
-    strategy_returns = apply_long_short_cash_strategy(portfolio_returns, state_probs, cash_threshold, leverage)
 
     # Graphique des probabilités de régimes
     st.subheader("Graphique des Probabilités des Régimes de Marché")
@@ -146,3 +112,4 @@ else:
     fig_regimes = px.scatter(test_data, x=test_data.index, y='Adj Close', color='Regime', 
                              title="Régimes de Marché Détectés", color_discrete_sequence=custom_color_palette)
     st.plotly_chart(fig_regimes)
+
